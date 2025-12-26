@@ -93,6 +93,26 @@ window.switchView = (viewName, element) => {
     if (window.innerWidth <= 768) {
         document.body.classList.remove('sidebar-active');
     }
+
+    // Sell View Specific Init
+    if (viewName === 'sell') {
+        const sellNames = document.getElementById('sell-names-list');
+        if (sellNames) {
+            // Populate unique names of products with stock
+            const availableNames = [...new Set(products
+                .filter(p => true) // All products? User said "existing values". 
+                // Showing all names is safer to let them start typing. 
+                // But generally "Sell" implies you have it. 
+                // Let's show all Names that exist in DB.
+                .map(p => p.name)
+            )].sort();
+            sellNames.innerHTML = availableNames.map(n => `<option value="${n}">`).join('');
+        }
+        // Should we clear downstream lists? Yes
+        document.getElementById('sell-cats-list').innerHTML = '';
+        document.getElementById('sell-sizes-list').innerHTML = '';
+        document.getElementById('sell-kgs-list').innerHTML = '';
+    }
 }
 
 window.toggleSidebar = () => {
@@ -172,7 +192,8 @@ const renderDashboardChart = () => {
 
     let labels = [];
     let data = [];
-    let colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+    // Neon Palette: Cyan, Purple, Pink, Lime, Orange, Blue
+    let colors = ['#06b6d4', '#8b5cf6', '#ec4899', '#84cc16', '#f97316', '#3b82f6'];
 
     if (dataPoints.length > 5) {
         const top5 = dataPoints.slice(0, 5);
@@ -361,58 +382,142 @@ const initTransactionForm = () => {
 
 window.updateDatalists = () => {
     const nameList = document.getElementById('prod-names-list');
+    /* We can remove separate lists for cat/size/kg if we want a single "Search Product" experience like a dropdown.
+       But the form has separate fields.
+       To make it "easy to select", sticking to Name selection is best.
+    */
     const catList = document.getElementById('prod-cats-list');
     const sizeList = document.getElementById('prod-sizes-list');
     const kgList = document.getElementById('prod-kgs-list');
 
-    if (!nameList || !catList || !sizeList || !kgList) return;
+    if (!nameList) return;
 
+    // For names, maybe include extra info to disambiguate?
+    // Or just unique names. Unique names is standard for the Name field.
     const names = [...new Set(products.map(p => p.name))].sort();
-    const cats = [...new Set(products.map(p => p.category))].sort();
-    const sizes = [...new Set(products.map(p => p.size))].sort();
-    const kgs = [...new Set(products.map(p => p.kg))].sort();
+
+    // Actually, for "Sell Stock", users typically want to see "Product Name - Brand - Size" in one go.
+    // But the current UI separates them.
+    // Let's keep the existing logic but ensure it refreshes correctly.
 
     nameList.innerHTML = names.map(n => `<option value="${n}">`).join('');
-    catList.innerHTML = cats.map(c => `<option value="${c}">`).join('');
-    sizeList.innerHTML = sizes.map(s => `<option value="${s}">`).join('');
-    kgList.innerHTML = kgs.map(k => `<option value="${k}">`).join('');
+
+    // Secondary lists
+    if (catList) {
+        const cats = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+        catList.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+    }
+    if (sizeList) {
+        const sizes = [...new Set(products.map(p => p.size).filter(Boolean))].sort();
+        sizeList.innerHTML = sizes.map(s => `<option value="${s}">`).join('');
+    }
+    if (kgList) {
+        const kgs = [...new Set(products.map(p => p.kg).filter(Boolean))].sort();
+        kgList.innerHTML = kgs.map(k => `<option value="${k}">`).join('');
+    }
 };
 
+// Product Input Handler
 window.handleProductInput = (type) => {
     const prefix = type === 'IN' ? 'buy' : 'sell';
 
-    const name = document.getElementById(`${prefix}-product-name`).value.trim();
-    const cat = document.getElementById(`${prefix}-category`).value.trim();
-    const size = document.getElementById(`${prefix}-size`).value.trim();
-    const kg = document.getElementById(`${prefix}-kg`).value.trim();
+    const nameInput = document.getElementById(`${prefix}-product-name`);
+    const catInput = document.getElementById(`${prefix}-category`);
+    const sizeInput = document.getElementById(`${prefix}-size`);
+    const kgInput = document.getElementById(`${prefix}-kg`);
+
+    const name = nameInput.value.trim();
+    const cat = catInput.value.trim();
+    const size = sizeInput.value.trim();
+    const kg = kgInput.value.trim();
 
     const infoGroup = document.getElementById(`${prefix}-info-group`);
     const stockDisplay = document.getElementById(`${prefix}-stock-display`);
     const priceInput = document.getElementById(`${prefix}-price`);
     const form = document.getElementById(`${prefix}-form`);
 
-    // Filter products by typed values (case-insensitive and trimmed)
-    const match = products.find(p =>
-        p.name.toLowerCase() === name.toLowerCase() &&
-        (p.category || '').toLowerCase() === cat.toLowerCase() &&
-        (p.size || '').toLowerCase() === size.toLowerCase() &&
-        (p.kg || '').toLowerCase() === kg.toLowerCase()
-    );
+    // --- CASCADING DROPDOWN LOGIC (Only for Sell) ---
+    if (type === 'OUT') {
+        const sellNames = document.getElementById('sell-names-list');
+        const sellCats = document.getElementById('sell-cats-list');
+        const sellSizes = document.getElementById('sell-sizes-list');
+        const sellKgs = document.getElementById('sell-kgs-list');
+
+        let available = products.filter(p => p.stock >= 0); // Strict existing
+
+        // Filter by Name
+        if (name) {
+            available = available.filter(p => p.name.toLowerCase() === name.toLowerCase());
+        }
+
+        // Update Brand List based on Name selection
+        if (sellCats) {
+            const cats = [...new Set(available.map(p => p.category).filter(Boolean))].sort();
+            sellCats.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+        }
+
+        // Filter by Brand
+        if (cat) {
+            available = available.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase());
+        }
+
+        // Update Size List based on Name + Brand
+        if (sellSizes) {
+            const sizes = [...new Set(available.map(p => p.size).filter(Boolean))].sort();
+            sellSizes.innerHTML = sizes.map(s => `<option value="${s}">`).join('');
+        }
+
+        // Filter by Size
+        if (size) {
+            available = available.filter(p => (p.size || '').toLowerCase() === size.toLowerCase());
+        }
+
+        // Update KG List based on Name + Brand + Size
+        if (sellKgs) {
+            const kgs = [...new Set(available.map(p => p.kg).filter(Boolean))].sort();
+            sellKgs.innerHTML = kgs.map(k => `<option value="${k}">`).join('');
+        }
+    }
+
+    // --- MATCHING LOGIC ---
+    let match = null;
+
+    if (name) {
+        const potentialMatches = products.filter(p => p.name.toLowerCase() === name.toLowerCase());
+
+        if (potentialMatches.length > 0) {
+            // Check if we have narrowed down to exactly one product via cascading filters
+            let narrowed = potentialMatches;
+            if (cat) narrowed = narrowed.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase());
+            if (size) narrowed = narrowed.filter(p => (p.size || '').toLowerCase() === size.toLowerCase());
+            if (kg) narrowed = narrowed.filter(p => (p.kg || '').toLowerCase() === kg.toLowerCase());
+
+            if (narrowed.length === 1) {
+                // If exactly one match remains, we found it.
+                // But only consider it "Matched" if the user has filled enough info, OR if it's the only option.
+                // For "one by one" feel, we might want to wait until the user has selected everything?
+                // But showing stock early is nice.
+                // Let's assume if narrowed.length === 1, we show the stock for that one item.
+                match = narrowed[0];
+            }
+        }
+    }
 
     if (match) {
         infoGroup.style.display = 'block';
         stockDisplay.textContent = match.stock;
         stockDisplay.style.color = match.stock <= match.minStock ? 'var(--danger)' : 'var(--text-primary)';
 
-        // Auto-fill price
-        priceInput.value = type === 'IN' ? (match.buyPrice || 0) : (match.sellPrice || 0);
+        if (!priceInput.value || priceInput.value == 0) {
+            priceInput.value = type === 'IN' ? (match.buyPrice || 0) : (match.sellPrice || 0);
+        }
 
-        // Store matched ID
         form.dataset.matchedId = match.id;
     } else {
         delete form.dataset.matchedId;
         infoGroup.style.display = 'none';
     }
+    // Don't clear inputs immediately to allow typing new products
 };
 
 window.toggleQuickAdd = () => { };
