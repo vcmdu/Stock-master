@@ -185,25 +185,25 @@
 
                             <div class="form-group">
                                 <label>Product Name</label>
-                                <input type="text" id="buy-product-name" list="prod-names-list"
+                                <input type="text" id="buy-product-name" list="buy-names-list"
                                     placeholder="Type or select product..." required oninput="handleProductInput('IN')">
                             </div>
 
                             <div class="form-group">
                                 <label>Brand</label>
-                                <input type="text" id="buy-category" list="prod-cats-list" placeholder="Brand" required
+                                <input type="text" id="buy-category" list="buy-cats-list" placeholder="Brand" required
                                     oninput="handleProductInput('IN')">
                             </div>
 
                             <div class="grid-2-inner">
                                 <div class="form-group">
                                     <label>Size (Optional)</label>
-                                    <input type="text" id="buy-size" list="prod-sizes-list" placeholder="Size"
+                                    <input type="text" id="buy-size" list="buy-sizes-list" placeholder="Size"
                                         oninput="handleProductInput('IN')">
                                 </div>
                                 <div class="form-group">
                                     <label>KG (Optional)</label>
-                                    <input type="text" id="buy-kg" list="prod-kgs-list" placeholder="KG"
+                                    <input type="text" id="buy-kg" list="buy-kgs-list" placeholder="KG"
                                         oninput="handleProductInput('IN')">
                                 </div>
                             </div>
@@ -339,10 +339,12 @@
                 </div>
             </section>
 
-            <datalist id="prod-names-list"></datalist>
-            <datalist id="prod-cats-list"></datalist>
-            <datalist id="prod-sizes-list"></datalist>
-            <datalist id="prod-kgs-list"></datalist>
+            <!-- Shared or Buy specific Datalists -->
+            <!-- We replaced prod-* with buy-* for the buy form -->
+            <datalist id="buy-names-list"></datalist>
+            <datalist id="buy-cats-list"></datalist>
+            <datalist id="buy-sizes-list"></datalist>
+            <datalist id="buy-kgs-list"></datalist>
 
             <!-- Sell Specific Datalists for Cascading -->
             <datalist id="sell-names-list"></datalist>

@@ -97,23 +97,27 @@ window.switchView = (viewName, element) => {
     // Sell View Specific Init
     if (viewName === 'sell') {
         const sellNames = document.getElementById('sell-names-list');
-        if (sellNames) {
-            // Populate unique names of products with stock
-            const availableNames = [...new Set(products
-                .filter(p => true) // All products? User said "existing values". 
-                // Showing all names is safer to let them start typing. 
-                // But generally "Sell" implies you have it. 
-                // Let's show all Names that exist in DB.
-                .map(p => p.name)
-            )].sort();
-            sellNames.innerHTML = availableNames.map(n => `<option value="${n}">`).join('');
-        }
-        // Should we clear downstream lists? Yes
+        if (sellNames) populateNames(sellNames);
         document.getElementById('sell-cats-list').innerHTML = '';
         document.getElementById('sell-sizes-list').innerHTML = '';
         document.getElementById('sell-kgs-list').innerHTML = '';
     }
+
+    // Buy View Specific Init
+    if (viewName === 'buy') {
+        const buyNames = document.getElementById('buy-names-list');
+        if (buyNames) populateNames(buyNames);
+        document.getElementById('buy-cats-list').innerHTML = '';
+        document.getElementById('buy-sizes-list').innerHTML = '';
+        document.getElementById('buy-kgs-list').innerHTML = '';
+    }
 }
+
+const populateNames = (listEl) => {
+    // Show all defined product names
+    const availableNames = [...new Set(products.map(p => p.name))].sort();
+    listEl.innerHTML = availableNames.map(n => `<option value="${n}">`).join('');
+};
 
 window.toggleSidebar = () => {
     document.body.classList.toggle('sidebar-active');
@@ -436,47 +440,57 @@ window.handleProductInput = (type) => {
     const priceInput = document.getElementById(`${prefix}-price`);
     const form = document.getElementById(`${prefix}-form`);
 
-    // --- CASCADING DROPDOWN LOGIC (Only for Sell) ---
+    // --- CASCADING DROPDOWN LOGIC (Shared for Buy & Sell) ---
+    // Note: For Buy, we allow new values, but we still want to show existing suggestions.
+
+    const listPrefix = type === 'IN' ? 'buy' : 'sell';
+    const namesList = document.getElementById(`${listPrefix}-names-list`);
+    const catsList = document.getElementById(`${listPrefix}-cats-list`);
+    const sizesList = document.getElementById(`${listPrefix}-sizes-list`);
+    const kgsList = document.getElementById(`${listPrefix}-kgs-list`);
+
+    // Filter Logic
+    let available = products;
+    // For Sell, filter for stock. For Buy, use all.
     if (type === 'OUT') {
-        const sellNames = document.getElementById('sell-names-list');
-        const sellCats = document.getElementById('sell-cats-list');
-        const sellSizes = document.getElementById('sell-sizes-list');
-        const sellKgs = document.getElementById('sell-kgs-list');
+        available = products.filter(p => p.stock >= 0);
+    } else {
+        // For Buy, start with all unique products to guide input, but don't restrict.
+        // We use all products as base to find existing suggestions.
+        available = products;
+    }
 
-        let available = products.filter(p => p.stock >= 0); // Strict existing
+    // Filter by Name
+    if (name) {
+        available = available.filter(p => p.name.toLowerCase() === name.toLowerCase());
+    }
 
-        // Filter by Name
-        if (name) {
-            available = available.filter(p => p.name.toLowerCase() === name.toLowerCase());
-        }
+    // Update Brand List based on Name selection
+    if (catsList) {
+        const cats = [...new Set(available.map(p => p.category).filter(Boolean))].sort();
+        catsList.innerHTML = cats.map(c => `<option value="${c}">`).join('');
+    }
 
-        // Update Brand List based on Name selection
-        if (sellCats) {
-            const cats = [...new Set(available.map(p => p.category).filter(Boolean))].sort();
-            sellCats.innerHTML = cats.map(c => `<option value="${c}">`).join('');
-        }
+    // Filter by Brand
+    if (cat) {
+        available = available.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase());
+    }
 
-        // Filter by Brand
-        if (cat) {
-            available = available.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase());
-        }
+    // Update Size List based on Name + Brand
+    if (sizesList) {
+        const sizes = [...new Set(available.map(p => p.size).filter(Boolean))].sort();
+        sizesList.innerHTML = sizes.map(s => `<option value="${s}">`).join('');
+    }
 
-        // Update Size List based on Name + Brand
-        if (sellSizes) {
-            const sizes = [...new Set(available.map(p => p.size).filter(Boolean))].sort();
-            sellSizes.innerHTML = sizes.map(s => `<option value="${s}">`).join('');
-        }
+    // Filter by Size
+    if (size) {
+        available = available.filter(p => (p.size || '').toLowerCase() === size.toLowerCase());
+    }
 
-        // Filter by Size
-        if (size) {
-            available = available.filter(p => (p.size || '').toLowerCase() === size.toLowerCase());
-        }
-
-        // Update KG List based on Name + Brand + Size
-        if (sellKgs) {
-            const kgs = [...new Set(available.map(p => p.kg).filter(Boolean))].sort();
-            sellKgs.innerHTML = kgs.map(k => `<option value="${k}">`).join('');
-        }
+    // Update KG List based on Name + Brand + Size
+    if (kgsList) {
+        const kgs = [...new Set(available.map(p => p.kg).filter(Boolean))].sort();
+        kgsList.innerHTML = kgs.map(k => `<option value="${k}">`).join('');
     }
 
     // --- MATCHING LOGIC ---
