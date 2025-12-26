@@ -71,17 +71,19 @@ window.switchView = (viewName, element) => {
     if (view) view.classList.add('active');
 
     // Reset Forms and UI States
-    const transForm = document.getElementById('transaction-form');
-    if (transForm) {
-        transForm.reset();
-        // Explicitly reset type to IN (Buy) and set current date
-        const typeIn = transForm.querySelector('input[name="type"][value="IN"]');
-        if (typeIn) typeIn.checked = true;
-        document.getElementById('trans-date').valueAsDate = new Date();
+    const buyForm = document.getElementById('buy-form');
+    if (buyForm) {
+        buyForm.reset();
+        document.getElementById('buy-date').valueAsDate = new Date();
+        document.getElementById('buy-info-group').style.display = 'none';
+        // Reset stock display
+    }
 
-        // Reset Form and UI States
-        const infoGroup = document.getElementById('trans-info-group');
-        if (infoGroup) infoGroup.style.display = 'none';
+    const sellForm = document.getElementById('sell-form');
+    if (sellForm) {
+        sellForm.reset();
+        document.getElementById('sell-date').valueAsDate = new Date();
+        document.getElementById('sell-info-group').style.display = 'none';
     }
 
     // Refresh data if needed
@@ -354,12 +356,7 @@ window.deleteProduct = (id) => {
 
 // --- TRANSACTIONS ---
 const initTransactionForm = () => {
-    // List for Type change to flip price
-    document.querySelectorAll('input[name="type"]').forEach(r => {
-        r.onchange = () => {
-            handleProductInput();
-        };
-    });
+    // No longer needed
 };
 
 window.updateDatalists = () => {
@@ -381,18 +378,18 @@ window.updateDatalists = () => {
     kgList.innerHTML = kgs.map(k => `<option value="${k}">`).join('');
 };
 
-window.handleProductInput = () => {
-    const name = document.getElementById('trans-product-name').value.trim();
-    const cat = document.getElementById('trans-category').value.trim();
-    const size = document.getElementById('trans-size').value.trim();
-    const kg = document.getElementById('trans-kg').value.trim();
-    const typeElem = document.querySelector('input[name="type"]:checked');
-    const type = typeElem ? typeElem.value : 'IN';
+window.handleProductInput = (type) => {
+    const prefix = type === 'IN' ? 'buy' : 'sell';
 
-    const infoGroup = document.getElementById('trans-info-group');
-    const stockDisplay = document.getElementById('trans-stock-display');
-    const priceInput = document.getElementById('trans-price');
-    const form = document.getElementById('transaction-form');
+    const name = document.getElementById(`${prefix}-product-name`).value.trim();
+    const cat = document.getElementById(`${prefix}-category`).value.trim();
+    const size = document.getElementById(`${prefix}-size`).value.trim();
+    const kg = document.getElementById(`${prefix}-kg`).value.trim();
+
+    const infoGroup = document.getElementById(`${prefix}-info-group`);
+    const stockDisplay = document.getElementById(`${prefix}-stock-display`);
+    const priceInput = document.getElementById(`${prefix}-price`);
+    const form = document.getElementById(`${prefix}-form`);
 
     // Filter products by typed values (case-insensitive and trimmed)
     const match = products.find(p =>
@@ -420,15 +417,16 @@ window.handleProductInput = () => {
 
 window.toggleQuickAdd = () => { };
 
-window.handleTransaction = (e) => {
+window.handleTransaction = (e, type) => {
     e.preventDefault();
-    const type = document.querySelector('input[name="type"]:checked').value;
-    const name = document.getElementById('trans-product-name').value;
-    const cat = document.getElementById('trans-category').value;
-    const size = document.getElementById('trans-size').value;
-    const kg = document.getElementById('trans-kg').value;
+    const prefix = type === 'IN' ? 'buy' : 'sell';
 
-    let prodId = document.getElementById('transaction-form').dataset.matchedId;
+    const name = document.getElementById(`${prefix}-product-name`).value;
+    const cat = document.getElementById(`${prefix}-category`).value;
+    const size = document.getElementById(`${prefix}-size`).value;
+    const kg = document.getElementById(`${prefix}-kg`).value;
+
+    let prodId = document.getElementById(`${prefix}-form`).dataset.matchedId;
     let product;
 
     if (!prodId) {
@@ -447,14 +445,17 @@ window.handleTransaction = (e) => {
     } else {
         prodId = parseInt(prodId);
         product = products.find(p => p.id === prodId);
+
+        // Double check matching if dataset id is stale? 
+        // Logic relies on handleProductInput updating dataset.matchedId
     }
 
     if (!product) return;
 
-    const date = document.getElementById('trans-date').value;
-    const qty = parseInt(document.getElementById('trans-qty').value);
-    const price = parseFloat(document.getElementById('trans-price').value);
-    const notes = document.getElementById('trans-notes').value;
+    const date = document.getElementById(`${prefix}-date`).value;
+    const qty = parseInt(document.getElementById(`${prefix}-qty`).value);
+    const price = parseFloat(document.getElementById(`${prefix}-price`).value);
+    const notes = document.getElementById(`${prefix}-notes`).value;
 
     if (type === 'OUT' && product.stock < qty) {
         alert(`Insufficient Stock! You only have ${product.stock}.`);
@@ -487,38 +488,50 @@ window.handleTransaction = (e) => {
 
     // Reset Form and state
     e.target.reset();
-    document.getElementById('trans-date').valueAsDate = new Date();
-    handleProductInput(); // Reset UI (hide SKU input, info group, etc.)
+    document.getElementById(`${prefix}-date`).valueAsDate = new Date();
+    handleProductInput(type); // Reset UI (hide SKU input, info group, etc.)
 };
 
 const renderTransactionHistory = () => {
-    const list = document.getElementById('transaction-history-list');
-    list.innerHTML = '';
-    const slice = [...transactions].reverse().slice(0, 20); // Last 20
+    const renderList = (elementId, typeFilter) => {
+        const list = document.getElementById(elementId);
+        if (!list) return;
 
-    slice.forEach(t => {
-        list.innerHTML += `
-            <div class="transaction-item">
-                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <div>
-                        <strong>${t.productName}</strong>
-                        ${t.productCategory || t.productSize || t.productKG ? `<span style="font-size:0.8rem; color:var(--text-secondary); margin-left:5px;">(${[t.productCategory, t.productSize, t.productKG].filter(Boolean).join(' • ')})</span>` : ''}
+        list.innerHTML = '';
+        let filtered = [...transactions];
+        if (typeFilter) {
+            filtered = filtered.filter(t => t.type === typeFilter);
+        }
+
+        filtered = filtered.reverse().slice(0, 20); // Last 20
+
+        filtered.forEach(t => {
+            list.innerHTML += `
+                <div class="transaction-item">
+                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <div>
+                            <strong>${t.productName}</strong>
+                            ${t.productCategory || t.productSize || t.productKG ? `<span style="font-size:0.8rem; color:var(--text-secondary); margin-left:5px;">(${[t.productCategory, t.productSize, t.productKG].filter(Boolean).join(' • ')})</span>` : ''}
+                        </div>
+                        <div>
+                            <span class="badge ${t.type === 'IN' ? 'in' : 'out'}">${t.type}</span>
+                            <button class="icon-btn small" onclick="editTransaction(${t.id})" style="margin-left:5px;"><ion-icon name="create-outline"></ion-icon></button>
+                        </div>
                     </div>
-                    <div>
-                        <span class="badge ${t.type === 'IN' ? 'in' : 'out'}">${t.type}</span>
-                        <button class="icon-btn small" onclick="editTransaction(${t.id})" style="margin-left:5px;"><ion-icon name="create-outline"></ion-icon></button>
+                    <div style="font-size:0.9rem; display:flex; justify-content:space-between; color:var(--text-secondary)">
+                        <span>${t.quantity} x ${formatCurrency(t.price)}</span>
+                        <strong>${formatCurrency(t.total)}</strong>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">
+                        ${t.date} ${t.notes ? '• ' + t.notes : ''}
                     </div>
                 </div>
-                <div style="font-size:0.9rem; display:flex; justify-content:space-between; color:var(--text-secondary)">
-                    <span>${t.quantity} x ${formatCurrency(t.price)}</span>
-                    <strong>${formatCurrency(t.total)}</strong>
-                </div>
-                <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">
-                    ${t.date} ${t.notes ? '• ' + t.notes : ''}
-                </div>
-            </div>
-        `;
-    });
+            `;
+        });
+    };
+
+    renderList('buy-history-list', 'IN');
+    renderList('sell-history-list', 'OUT');
 };
 
 window.editTransaction = (id) => {
@@ -735,7 +748,11 @@ window.clearReportFilters = () => {
 };
 
 // Init
-document.getElementById('trans-date').valueAsDate = new Date();
+// Init
+const buyDate = document.getElementById('buy-date');
+if (buyDate) buyDate.valueAsDate = new Date();
+const sellDate = document.getElementById('sell-date');
+if (sellDate) sellDate.valueAsDate = new Date();
 
 // --- BACKUP & RESTORE ---
 window.downloadBackupJSON = () => {
