@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockMaster Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="brand">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <ion-icon name="cube"></ion-icon>
+                    <span>AMMAN</span>
+                </div>
+                <button class="icon-btn mobile-only" onclick="toggleSidebar()" style="margin-left: auto;">
+                    <ion-icon name="close-outline"></ion-icon>
+                </button>
+            </div>
+            <ul class="nav-links">
+                <li class="active" onclick="switchView('dashboard', this)">
+                    <ion-icon name="grid-outline"></ion-icon>
+                    <span>Dashboard</span>
+                </li>
+                <li onclick="switchView('inventory', this)">
+                    <ion-icon name="layers-outline"></ion-icon>
+                    <span>Inventory</span>
+                </li>
+                <li onclick="switchView('buy', this)">
+                    <ion-icon name="arrow-down-circle-outline"></ion-icon>
+                    <span>Buy Stock</span>
+                </li>
+                <li onclick="switchView('sell', this)">
+                    <ion-icon name="arrow-up-circle-outline"></ion-icon>
+                    <span>Sell Stock</span>
+                </li>
+                <li onclick="switchView('reports', this)">
+                    <ion-icon name="bar-chart-outline"></ion-icon>
+                    <span>Reports</span>
+                </li>
+                <li onclick="switchView('settings', this)">
+                    <ion-icon name="settings-outline"></ion-icon>
+                    <span>Settings</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Sidebar Overlay -->
+            <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+            <!-- Header -->
+            <header>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button class="icon-btn mobile-only" id="mobile-menu-btn" onclick="toggleSidebar()">
+                        <ion-icon name="menu-outline"></ion-icon>
+                    </button>
+                    <h2 id="page-title">Dashboard</h2>
+                </div>
+                <div class="user-actions">
+                </div>
+            </header>
+
+            <!-- VIEW: Dashboard -->
+            <section id="view-dashboard" class="view active">
+                <div class="stats-grid">
+                    <div class="card stat-card">
+                        <div class="stat-icon up"><ion-icon name="cash-outline"></ion-icon></div>
+                        <div>
+                            <h4>Total Asset Value</h4>
+                            <h2 id="dash-total-value">₹0.00</h2>
+                        </div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-icon warn"><ion-icon name="alert-circle-outline"></ion-icon></div>
+                        <div>
+                            <h4>Low Stock Items</h4>
+                            <h2 id="dash-low-stock">0</h2>
+                        </div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-icon"><ion-icon name="cube-outline"></ion-icon></div>
+                        <div>
+                            <h4>Total Products</h4>
+                            <h2 id="dash-total-products">0</h2>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <!-- Dashboard Charts -->
+                <div class="card" style="margin-bottom: 20px;">
+                    <div class="card-header">
+                        <h3>Inventory Distribution (By Value)</h3>
+                    </div>
+                    <div style="height: 300px; display: flex; justify-content: center;">
+                        <canvas id="dashboard-pie-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="dashboard-split">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Low Stock Alerts</h3>
+                        </div>
+                        <div id="low-stock-list" class="list-container">
+                            <!-- Injected JS -->
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recent Activity</h3>
+                        </div>
+                        <div id="recent-activity-list" class="list-container">
+                            <!-- Injected JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: Inventory -->
+            <section id="view-inventory" class="view">
+                <div class="toolbar">
+                    <div class="search-wrap">
+                        <ion-icon name="search-outline"></ion-icon>
+                        <input type="text" id="inv-search" placeholder="Search products..." onkeyup="renderInventory()">
+                    </div>
+                    <button class="btn btn-primary" onclick="openProductModal()">
+                        <ion-icon name="add"></ion-icon> New Product
+                    </button>
+                </div>
+                <div class="card table-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Brand</th>
+                                <th>Size</th>
+                                <th>KG</th>
+                                <th>Stock</th>
+                                <th>Min Level</th>
+                                <th>Buy Price</th>
+                                <th>Sell Price</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-table-body">
+                            <!-- JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: Buy Stock -->
+            <section id="view-buy" class="view">
+                <div class="grid-2">
+                    <!-- Buy Form -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Buy Stock (IN)</h3>
+                        </div>
+                        <form id="buy-form" onsubmit="handleTransaction(event, 'IN')">
+                            <input type="hidden" name="type" value="IN">
+
+                            <div class="form-group">
+                                <label>Date</label>
+                                <input type="date" id="buy-date" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Product Name</label>
+                                <input type="text" id="buy-product-name" list="buy-names-list"
+                                    placeholder="Type or select product..." required oninput="handleProductInput('IN')">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Brand</label>
+                                <input type="text" id="buy-category" list="buy-cats-list" placeholder="Brand" required
+                                    oninput="handleProductInput('IN')">
+                            </div>
+
+                            <div class="grid-2-inner">
+                                <div class="form-group">
+                                    <label>Size (Optional)</label>
+                                    <input type="text" id="buy-size" list="buy-sizes-list" placeholder="Size"
+                                        oninput="handleProductInput('IN')">
+                                </div>
+                                <div class="form-group">
+                                    <label>KG (Optional)</label>
+                                    <input type="text" id="buy-kg" list="buy-kgs-list" placeholder="KG"
+                                        oninput="handleProductInput('IN')">
+                                </div>
+                            </div>
+
+                            <div class="form-group" id="buy-info-group"
+                                style="display:none; background:rgba(255,255,255,0.05); padding:12px; border-radius:8px;">
+                                <div
+                                    style="display: flex; gap: 15px; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <label style="margin-bottom:4px; font-size:0.75rem;">Current Stock</label>
+                                        <div id="buy-stock-display" style="font-weight:700;">-</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid-2-inner">
+                                <div class="form-group">
+                                    <label>Quantity</label>
+                                    <input type="number" id="buy-qty" min="1" required placeholder="0">
+                                </div>
+                                <div class="form-group">
+                                    <label>Unit Price (Buy)</label>
+                                    <input type="number" id="buy-price" min="0" step="0.01" required placeholder="0.00">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Notes (Optional)</label>
+                                <input type="text" id="buy-notes" placeholder="Supplier name...">
+                            </div>
+
+                            <button type="submit" class="btn btn-primary full-width">Record Purchase</button>
+                        </form>
+                    </div>
+
+                    <!-- History (Shared or specific? distinct for now makes sense or shared is fine) -->
+                    <!-- Giving it a dedicated history container for Buy logs could be nice but shared is ok too. Let's keep shared history logic but separate container id -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recent Purchases</h3>
+                        </div>
+                        <div class="list-container" id="buy-history-list">
+                            <!-- JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: Sell Stock -->
+            <section id="view-sell" class="view">
+                <div class="grid-2">
+                    <!-- Sell Form -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Sell Stock (OUT)</h3>
+                        </div>
+                        <form id="sell-form" onsubmit="handleTransaction(event, 'OUT')">
+                            <input type="hidden" name="type" value="OUT">
+
+                            <div class="form-group">
+                                <label>Date</label>
+                                <input type="date" id="sell-date" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Product Name</label>
+                                <input type="text" id="sell-product-name" list="sell-names-list"
+                                    placeholder="Type or select product..." required
+                                    oninput="handleProductInput('OUT')">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Brand</label>
+                                <input type="text" id="sell-category" list="sell-cats-list" placeholder="Brand" required
+                                    oninput="handleProductInput('OUT')">
+                            </div>
+
+                            <div class="grid-2-inner">
+                                <div class="form-group">
+                                    <label>Size (Optional)</label>
+                                    <input type="text" id="sell-size" list="sell-sizes-list" placeholder="Size"
+                                        oninput="handleProductInput('OUT')">
+                                </div>
+                                <div class="form-group">
+                                    <label>KG (Optional)</label>
+                                    <input type="text" id="sell-kg" list="sell-kgs-list" placeholder="KG"
+                                        oninput="handleProductInput('OUT')">
+                                </div>
+                            </div>
+
+                            <div class="form-group" id="sell-info-group"
+                                style="display:none; background:rgba(255,255,255,0.05); padding:12px; border-radius:8px;">
+                                <div
+                                    style="display: flex; gap: 15px; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <label style="margin-bottom:4px; font-size:0.75rem;">Available Stock</label>
+                                        <div id="sell-stock-display" style="font-weight:700;">-</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid-2-inner">
+                                <div class="form-group">
+                                    <label>Quantity</label>
+                                    <input type="number" id="sell-qty" min="1" required placeholder="0">
+                                </div>
+                                <div class="form-group">
+                                    <label>Unit Price (Sell)</label>
+                                    <input type="number" id="sell-price" min="0" step="0.01" required
+                                        placeholder="0.00">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Notes (Optional)</label>
+                                <input type="text" id="sell-notes" placeholder="Customer name...">
+                            </div>
+
+                            <button type="submit" class="btn btn-primary full-width"
+                                style="background-color: var(--danger);">Record Sale</button>
+                        </form>
+                    </div>
+
+                    <!-- History -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recent Sales</h3>
+                        </div>
+                        <div class="list-container" id="sell-history-list">
+                            <!-- JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Shared or Buy specific Datalists -->
+            <!-- We replaced prod-* with buy-* for the buy form -->
+            <datalist id="buy-names-list"></datalist>
+            <datalist id="buy-cats-list"></datalist>
+            <datalist id="buy-sizes-list"></datalist>
+            <datalist id="buy-kgs-list"></datalist>
+
+            <!-- Sell Specific Datalists for Cascading -->
+            <datalist id="sell-names-list"></datalist>
+            <datalist id="sell-cats-list"></datalist>
+            <datalist id="sell-sizes-list"></datalist>
+            <datalist id="sell-kgs-list"></datalist>
+
+            <!-- VIEW: Reports -->
+            <!-- VIEW: Reports -->
+            <section id="view-reports" class="view">
+                <div class="card toolbar reports-toolbar">
+                    <div class="form-group">
+                        <label>From Date</label>
+                        <input type="date" id="report-date-from">
+                    </div>
+                    <div class="form-group">
+                        <label>To Date</label>
+                        <input type="date" id="report-date-to">
+                    </div>
+                    <button class="btn btn-primary" onclick="runReports()">
+                        <ion-icon name="filter"></ion-icon> Filter Reports
+                    </button>
+                    <div class="report-btn-group">
+                        <button class="btn btn-primary" onclick="clearReportFilters()">
+                            Clear
+                        </button>
+                        <button class="btn btn-primary" style="background:#ef4444; border-color:#ef4444"
+                            onclick="downloadReportPDF()">
+                            <ion-icon name="document-text-outline"></ion-icon> PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="card stat-card">
+                        <div class="stat-icon"><ion-icon name="cart-outline"></ion-icon></div>
+                        <div>
+                            <h4>Total Sales</h4>
+                            <h2 id="report-sales">₹0.00</h2>
+                        </div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-icon"><ion-icon name="wallet-outline"></ion-icon></div>
+                        <div>
+                            <h4>Total Purchases</h4>
+                            <h2 id="report-cost">₹0.00</h2>
+                        </div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="stat-icon success"><ion-icon name="trending-up-outline"></ion-icon></div>
+                        <div>
+                            <h4>Net Profit</h4>
+                            <h2 id="report-profit" class="text-success">₹0.00</h2>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="card table-card" style="margin-top: 20px;">
+                    <div class="card-header">
+                        <h3>Transaction Report Log</h3>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Product</th>
+                                <th>Qty</th>
+                                <th>Total</th>
+                                <th>Notes</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-table-body">
+                            <!-- JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: Settings -->
+            <section id="view-settings" class="view">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Data Management</h3>
+                    </div>
+                    <p style="color:var(--text-secondary); margin-bottom:20px;">
+                        Save your data to a file to transfer between devices or keep a backup.
+                    </p>
+
+                    <div class="grid-2-inner">
+                        <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:10px;">
+                            <h4>Backup Data</h4>
+                            <p style="font-size:0.9rem; color:var(--text-secondary); margin:10px 0;">
+                                Download a copy of your Stock and Transaction history.
+                            </p>
+                            <button class="btn btn-primary" onclick="downloadBackupJSON()">
+                                <ion-icon name="code-download-outline"></ion-icon> Download Data (JSON)
+                            </button>
+                            <button class="btn btn-primary"
+                                style="margin-top:10px; background:#ef4444; border-color:#ef4444"
+                                onclick="downloadBackupPDF()">
+                                <ion-icon name="document-text-outline"></ion-icon> Download Report (PDF)
+                            </button>
+                        </div>
+
+                        <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:10px;">
+                            <h4>Restore Data</h4>
+                            <p style="font-size:0.9rem; color:var(--text-secondary); margin:10px 0;">
+                                Restore from a previously saved backup file.
+                                <strong style="color:var(--danger)">Warning: overwrites current data.</strong>
+                            </p>
+                            <input type="file" id="restore-file" style="display:none" onchange="restoreData(this)">
+                            <button class="btn" style="background:var(--warning); color:black"
+                                onclick="document.getElementById('restore-file').click()">
+                                <ion-icon name="cloud-upload-outline"></ion-icon> Restore Backup
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:40px; border-top:1px solid var(--border); padding-top:20px;">
+                        <h4 style="color:var(--danger)">Danger Zone</h4>
+                        <button class="btn" style="background:var(--danger); color:white; margin-top:10px;"
+                            onclick="removeAllData()">
+                            <ion-icon name="trash-outline"></ion-icon> Wipe All Data
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Product Modal -->
+    <div id="product-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="product-modal-title">New Product</h3>
+                <button onclick="closeProductModal()" class="icon-btn"><ion-icon name="close"></ion-icon></button>
+            </div>
+            <form onsubmit="saveProduct(event)">
+                <input type="hidden" id="prod-id">
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input type="text" id="prod-name" required placeholder="e.g. Wireless Mouse">
+                </div>
+
+                <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <div class="form-group">
+                        <label>Brand</label>
+                        <input type="text" id="prod-category" placeholder="e.g. Tata">
+                    </div>
+                    <div class="form-group">
+                        <label>Size</label>
+                        <input type="text" id="prod-size" placeholder="e.g. 12 Inch">
+                    </div>
+                    <div class="form-group">
+                        <label>KG</label>
+                        <input type="text" id="prod-kg" placeholder="e.g. 2.5">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Min Stock Level</label>
+                    <input type="number" id="prod-min" min="0" value="5">
+                </div>
+
+                <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group">
+                        <label>Buy Price (Cost)</label>
+                        <input type="number" id="prod-buy" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Sell Price</label>
+                        <input type="number" id="prod-sell" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div id="initial-stock-group" class="form-group"
+                    style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-top:10px;">
+                    <label>Initial Stock Quantity</label>
+                    <input type="number" id="prod-stock" min="0" value="0">
+                    <small style="color:#888;">Adding stock here creates an opening balance entry.</small>
+                </div>
+                <button type="submit" class="btn btn-primary full-width">Save Product</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Transaction Edit Modal -->
+    <div id="transaction-edit-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Edit Transaction</h3>
+                <button onclick="document.getElementById('transaction-edit-modal').classList.remove('active')"
+                    class="icon-btn"><ion-icon name="close"></ion-icon></button>
+            </div>
+            <form onsubmit="updateTransaction(event)">
+                <input type="hidden" id="edit-trans-id">
+                <div class="form-group">
+                    <label>Transaction Type</label>
+                    <div class="radio-group">
+                        <label class="radio-label type-in">
+                            <input type="radio" name="edit-type" value="IN" id="edit-type-in">
+                            <span><ion-icon name="arrow-down"></ion-icon> IN</span>
+                        </label>
+                        <label class="radio-label type-out">
+                            <input type="radio" name="edit-type" value="OUT" id="edit-type-out">
+                            <span><ion-icon name="arrow-up"></ion-icon> OUT</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="edit-trans-date" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Product (Read Only)</label>
+                    <input type="text" id="edit-trans-product" readonly
+                        style="background:rgba(255,255,255,0.05); color:var(--text-secondary)">
+                </div>
+
+                <div class="grid-2-inner">
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="edit-trans-qty" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Unit Price</label>
+                        <input type="number" id="edit-trans-price" min="0" step="0.01" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Notes</label>
+                    <input type="text" id="edit-trans-notes">
+                </div>
+
+                <div class="form-group"
+                    style="background:rgba(239, 68, 68, 0.1); padding:10px; border-radius:5px; border:1px solid rgba(239, 68, 68, 0.3);">
+                    <small style="color:#fca5a5;">
+                        <ion-icon name="warning-outline"></ion-icon>
+                        Warning: Changing quantity or type will adjust current stock levels based on the difference.
+                    </small>
+                </div>
+
+                <button type="submit" class="btn btn-primary full-width">Update Transaction</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
