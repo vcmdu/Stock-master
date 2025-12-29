@@ -4,12 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockMaster Pro</title>
+    <title>StockMaster Pro | Professional Inventory Management</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+        rel="stylesheet">
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -78,38 +81,55 @@
             <!-- VIEW: Dashboard -->
             <section id="view-dashboard" class="view active">
                 <div class="stats-grid">
-                    <div class="card stat-card">
+                    <div class="card stat-card stagger-item" onclick="showInventory()" style="cursor: pointer;">
                         <div class="stat-icon up"><ion-icon name="cash-outline"></ion-icon></div>
                         <div>
                             <h4>Total Asset Value</h4>
                             <h2 id="dash-total-value">₹0.00</h2>
                         </div>
                     </div>
-                    <div class="card stat-card">
+                    <div class="card stat-card stagger-item" onclick="showLowStock()" style="cursor: pointer;">
                         <div class="stat-icon warn"><ion-icon name="alert-circle-outline"></ion-icon></div>
                         <div>
                             <h4>Low Stock Items</h4>
                             <h2 id="dash-low-stock">0</h2>
                         </div>
                     </div>
-                    <div class="card stat-card">
+                    <div class="card stat-card stagger-item" onclick="showInventory()" style="cursor: pointer;">
                         <div class="stat-icon"><ion-icon name="cube-outline"></ion-icon></div>
                         <div>
                             <h4>Total Products</h4>
                             <h2 id="dash-total-products">0</h2>
                         </div>
                     </div>
+                    <div class="card stat-card stagger-item" onclick="showOutOfStock()" style="cursor: pointer;">
+                        <div class="stat-icon out"><ion-icon name="close-circle-outline"></ion-icon></div>
+                        <div>
+                            <h4>Out of Stock</h4>
+                            <h2 id="dash-out-of-stock">0</h2>
+                        </div>
+                    </div>
                 </div>
+
 
 
 
                 <!-- Dashboard Charts -->
                 <div class="card" style="margin-bottom: 20px;">
                     <div class="card-header">
-                        <h3>Inventory Distribution (By Value)</h3>
+                        <h3>Inventory Performance</h3>
+                        <div class="chart-period-selector">
+                            <button class="period-btn" data-period="day" onclick="updateChartPeriod('day')">Day</button>
+                            <button class="period-btn" data-period="week"
+                                onclick="updateChartPeriod('week')">Week</button>
+                            <button class="period-btn active" data-period="month"
+                                onclick="updateChartPeriod('month')">Month</button>
+                            <button class="period-btn" data-period="year"
+                                onclick="updateChartPeriod('year')">Year</button>
+                        </div>
                     </div>
-                    <div style="height: 300px; display: flex; justify-content: center;">
-                        <canvas id="dashboard-pie-chart"></canvas>
+                    <div style="height: 300px; padding: 20px 10px;">
+                        <canvas id="dashboard-line-chart"></canvas>
                     </div>
                 </div>
 
@@ -148,6 +168,7 @@
                     <table>
                         <thead>
                             <tr>
+                                <th>S.No</th>
                                 <th>Product</th>
                                 <th>Brand</th>
                                 <th>Size</th>
@@ -270,27 +291,30 @@
 
                             <div class="form-group">
                                 <label>Product Name</label>
-                                <input type="text" id="sell-product-name" list="sell-names-list"
-                                    placeholder="Type or select product..." required
-                                    oninput="handleProductInput('OUT')">
+                                <select id="sell-product-name" required onchange="handleProductInput('OUT')">
+                                    <option value="">Select Product...</option>
+                                </select>
                             </div>
 
                             <div class="form-group">
                                 <label>Brand</label>
-                                <input type="text" id="sell-category" list="sell-cats-list" placeholder="Brand" required
-                                    oninput="handleProductInput('OUT')">
+                                <select id="sell-category" required onchange="handleProductInput('OUT')">
+                                    <option value="">Select Brand...</option>
+                                </select>
                             </div>
 
                             <div class="grid-2-inner">
                                 <div class="form-group">
                                     <label>Size (Optional)</label>
-                                    <input type="text" id="sell-size" list="sell-sizes-list" placeholder="Size"
-                                        oninput="handleProductInput('OUT')">
+                                    <select id="sell-size" onchange="handleProductInput('OUT')">
+                                        <option value="">Select Size...</option>
+                                    </select>
                                 </div>
                                 <div class="form-group">
                                     <label>KG (Optional)</label>
-                                    <input type="text" id="sell-kg" list="sell-kgs-list" placeholder="KG"
-                                        oninput="handleProductInput('OUT')">
+                                    <select id="sell-kg" onchange="handleProductInput('OUT')">
+                                        <option value="">Select KG...</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -353,28 +377,31 @@
             <datalist id="sell-kgs-list"></datalist>
 
             <!-- VIEW: Reports -->
-            <!-- VIEW: Reports -->
             <section id="view-reports" class="view">
-                <div class="card toolbar reports-toolbar">
-                    <div class="form-group">
-                        <label>From Date</label>
-                        <input type="date" id="report-date-from">
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="grid-2-inner" style="margin-bottom: 24px;">
+                        <div class="form-group">
+                            <label>From Date</label>
+                            <input type="date" id="report-date-from">
+                        </div>
+                        <div class="form-group">
+                            <label>To Date</label>
+                            <input type="date" id="report-date-to">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>To Date</label>
-                        <input type="date" id="report-date-to">
-                    </div>
-                    <button class="btn btn-primary" onclick="runReports()">
-                        <ion-icon name="filter"></ion-icon> Filter Reports
-                    </button>
-                    <div class="report-btn-group">
-                        <button class="btn btn-primary" onclick="clearReportFilters()">
-                            Clear
+                    <div class="toolbar" style="margin-bottom: 0;">
+                        <button class="btn btn-primary" onclick="runReports()">
+                            <ion-icon name="filter"></ion-icon> Filter Reports
                         </button>
-                        <button class="btn btn-primary" style="background:#ef4444; border-color:#ef4444"
-                            onclick="downloadReportPDF()">
-                            <ion-icon name="document-text-outline"></ion-icon> PDF
-                        </button>
+                        <div class="report-btn-group">
+                            <button class="btn btn-primary" onclick="clearReportFilters()">
+                                Clear
+                            </button>
+                            <button class="btn btn-primary" style="background:#ef4444; border-color:#ef4444"
+                                onclick="downloadReportPDF()">
+                                <ion-icon name="document-text-outline"></ion-icon> PDF
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -411,13 +438,13 @@
                     <table>
                         <thead>
                             <tr>
+                                <th>S.No</th>
                                 <th>Date</th>
                                 <th>Type</th>
                                 <th>Product</th>
                                 <th>Qty</th>
                                 <th>Total</th>
                                 <th>Notes</th>
-                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="report-table-body">
@@ -497,7 +524,7 @@
                 <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                     <div class="form-group">
                         <label>Brand</label>
-                        <input type="text" id="prod-category" placeholder="e.g. Tata">
+                        <input type="text" id="prod-category" required placeholder="e.g. Tata">
                     </div>
                     <div class="form-group">
                         <label>Size</label>
@@ -517,11 +544,11 @@
                 <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div class="form-group">
                         <label>Buy Price (Cost)</label>
-                        <input type="number" id="prod-buy" step="0.01" min="0" placeholder="0.00">
+                        <input type="number" id="prod-buy" step="0.01" min="0" required placeholder="0.00">
                     </div>
                     <div class="form-group">
                         <label>Sell Price</label>
-                        <input type="number" id="prod-sell" step="0.01" min="0" placeholder="0.00">
+                        <input type="number" id="prod-sell" step="0.01" min="0" required placeholder="0.00">
                     </div>
                 </div>
 
@@ -600,7 +627,9 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+    <script src="app.js" defer></script>
 </body>
 
 </html>
