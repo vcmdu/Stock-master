@@ -26,8 +26,8 @@
         <nav class="sidebar" id="sidebar">
             <div class="brand">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <ion-icon name="cube"></ion-icon>
-                    <span>AMMAN</span>
+                    <ion-icon name="cube" class="brand-icon"></ion-icon>
+                    <span class="amman-text">AMMAN</span>
                 </div>
                 <button class="icon-btn mobile-only" onclick="toggleSidebar()" style="margin-left: auto;">
                     <ion-icon name="close-outline"></ion-icon>
@@ -111,25 +111,38 @@
                     </div>
                 </div>
 
-
-
-
-                <!-- Dashboard Charts -->
-                <div class="card" style="margin-bottom: 20px;">
-                    <div class="card-header">
-                        <h3>Inventory Performance</h3>
-                        <div class="chart-period-selector">
-                            <button class="period-btn" data-period="day" onclick="updateChartPeriod('day')">Day</button>
-                            <button class="period-btn" data-period="week"
-                                onclick="updateChartPeriod('week')">Week</button>
-                            <button class="period-btn active" data-period="month"
-                                onclick="updateChartPeriod('month')">Month</button>
-                            <button class="period-btn" data-period="year"
-                                onclick="updateChartPeriod('year')">Year</button>
+                <!-- Dashboard Charts Check -->
+                <div class="chart-section" style="margin-bottom: 24px;">
+                    <!-- Combined Growth & Category Analytics -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Growth Analytics</h3>
+                            <div class="chart-period-selector">
+                                <button class="period-btn" data-period="week"
+                                    onclick="updateChartPeriod('week')">Week</button>
+                                <button class="period-btn active" data-period="month"
+                                    onclick="updateChartPeriod('month')">Month</button>
+                                <button class="period-btn" data-period="year"
+                                    onclick="updateChartPeriod('year')">Year</button>
+                            </div>
                         </div>
-                    </div>
-                    <div style="height: 300px; padding: 20px 10px;">
-                        <canvas id="dashboard-line-chart"></canvas>
+
+                        <div class="chart-split-container" style="display: flex; gap: 24px; flex-wrap: wrap;">
+                            <!-- Main Bar Chart -->
+                            <div style="flex: 2; min-width: 300px; height: 350px; position: relative;">
+                                <canvas id="dashboard-line-chart"></canvas>
+                            </div>
+
+                            <!-- Pie Chart -->
+                            <div
+                                style="flex: 1; min-width: 250px; height: 350px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 1px solid var(--glass-border); padding-left: 20px;">
+                                <h4 style="margin-bottom: 15px; color: var(--text-secondary); font-size: 0.9rem;">
+                                    Category Dist.</h4>
+                                <div style="width: 100%; height: 100%;">
+                                    <canvas id="dashboard-pie-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -171,6 +184,7 @@
                                 <th>S.No</th>
                                 <th>Product</th>
                                 <th>Brand</th>
+                                <th>Category</th>
                                 <th>Size</th>
                                 <th>KG</th>
                                 <th>Stock</th>
@@ -210,10 +224,17 @@
                                     placeholder="Type or select product..." required oninput="handleProductInput('IN')">
                             </div>
 
-                            <div class="form-group">
-                                <label>Brand</label>
-                                <input type="text" id="buy-category" list="buy-cats-list" placeholder="Brand" required
-                                    oninput="handleProductInput('IN')">
+                            <div class="grid-2-inner">
+                                <div class="form-group">
+                                    <label>Brand</label>
+                                    <input type="text" id="buy-brand" list="buy-brands-list" placeholder="Brand"
+                                        required oninput="handleProductInput('IN')">
+                                </div>
+                                <div class="form-group">
+                                    <label>Category</label>
+                                    <input type="text" id="buy-category" list="buy-cats-list" placeholder="Category"
+                                        oninput="handleProductInput('IN')">
+                                </div>
                             </div>
 
                             <div class="grid-2-inner">
@@ -260,8 +281,7 @@
                         </form>
                     </div>
 
-                    <!-- History (Shared or specific? distinct for now makes sense or shared is fine) -->
-                    <!-- Giving it a dedicated history container for Buy logs could be nice but shared is ok too. Let's keep shared history logic but separate container id -->
+                    <!-- History -->
                     <div class="card">
                         <div class="card-header">
                             <h3>Recent Purchases</h3>
@@ -296,11 +316,19 @@
                                 </select>
                             </div>
 
-                            <div class="form-group">
-                                <label>Brand</label>
-                                <select id="sell-category" required onchange="handleProductInput('OUT')">
-                                    <option value="">Select Brand...</option>
-                                </select>
+                            <div class="grid-2-inner">
+                                <div class="form-group">
+                                    <label>Brand</label>
+                                    <select id="sell-brand" required onchange="handleProductInput('OUT')">
+                                        <option value="">Select Brand...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Category</label>
+                                    <select id="sell-category" onchange="handleProductInput('OUT')">
+                                        <option value="">Select Category...</option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div class="grid-2-inner">
@@ -364,14 +392,15 @@
             </section>
 
             <!-- Shared or Buy specific Datalists -->
-            <!-- We replaced prod-* with buy-* for the buy form -->
             <datalist id="buy-names-list"></datalist>
+            <datalist id="buy-brands-list"></datalist>
             <datalist id="buy-cats-list"></datalist>
             <datalist id="buy-sizes-list"></datalist>
             <datalist id="buy-kgs-list"></datalist>
 
             <!-- Sell Specific Datalists for Cascading -->
             <datalist id="sell-names-list"></datalist>
+            <datalist id="sell-brands-list"></datalist>
             <datalist id="sell-cats-list"></datalist>
             <datalist id="sell-sizes-list"></datalist>
             <datalist id="sell-kgs-list"></datalist>
@@ -428,8 +457,6 @@
                         </div>
                     </div>
                 </div>
-
-
 
                 <div class="card table-card" style="margin-top: 20px;">
                     <div class="card-header">
@@ -521,11 +548,18 @@
                     <input type="text" id="prod-name" required placeholder="e.g. Wireless Mouse">
                 </div>
 
-                <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div class="form-group">
                         <label>Brand</label>
-                        <input type="text" id="prod-category" required placeholder="e.g. Tata">
+                        <input type="text" id="prod-brand" required placeholder="e.g. Tata">
                     </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="prod-category" placeholder="e.g. Steel">
+                    </div>
+                </div>
+
+                <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div class="form-group">
                         <label>Size</label>
                         <input type="text" id="prod-size" placeholder="e.g. 12 Inch">
