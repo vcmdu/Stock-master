@@ -77,16 +77,10 @@ window.showOutOfStock = () => {
 // Aliases for HTML onclick compatibility
 window.showInventory = window.showAllStock;
 
-window.switchView = (viewName, element) => {
-    // Note: We do NOT reset currentInvFilter here if coming from a specific dashboard action
-    // But if clicking sidebar 'Inventory', we usually want 'all'.
-    // We can check if 'element' is passed (clicked from sidebar).
+window.switchView = (viewName, element, updateHistory = true) => {
     if (element && viewName === 'inventory') {
         currentInvFilter = 'all';
     }
-    // If navigating to non-inventory view, reset filter for next time? Or keep?
-    // Let's keep it until changed. But if going Dashboard -> Buy -> Inventory, it might be confusing.
-    // For now, only explicit sidebar click resets it.
 
     // Update Menu
     document.querySelectorAll('.nav-links li').forEach(li => li.classList.remove('active'));
@@ -126,7 +120,21 @@ window.switchView = (viewName, element) => {
     if (window.innerWidth <= 768) {
         document.body.classList.remove('sidebar-active');
     }
+
+    // History API
+    if (updateHistory) {
+        history.pushState({ view: viewName }, titles[viewName], `?view=${viewName}`);
+    }
 };
+
+window.addEventListener('popstate', (event) => {
+    if (event.state && event.state.view) {
+        switchView(event.state.view, null, false);
+    } else {
+        // Fallback or default
+        switchView('dashboard', null, false);
+    }
+});
 
 const resetForms = (viewName) => {
     if (viewName !== 'buy') {
@@ -368,13 +376,6 @@ window.renderDashboardChart = () => {
     const sortedDates = [...dates].sort();
 
     // 3. Replay State Day by Day
-    // Map: Date -> Total Asset Value
-
-    // We also need prices. Price history? 
-    // Simplified: Use current buyPrice for historical evaluation OR
-    // use the price at transaction time? Standard accounting uses weighted avg or FIFO.
-    // For simplicity: Use CURRENT buyPrice. It's an estimation of *current* value of historical stock.
-
     const prePeriodState = {};
     const periodStart = new Date();
     const lastDate = new Date(todayStr);
@@ -422,11 +423,6 @@ window.renderDashboardChart = () => {
             pTxIdx++;
         }
 
-        // Logic for Week/Month/Year Sampling
-        // Week: Show Daily (7 points)
-        // Month: Show every 3rd day? Or Daily? ChartJS handles many points well. Daily is fine for 30.
-        // Year: Monthly average? Or 1st of month?
-
         const shouldAdd =
             (currentChartPeriod === 'week') || // Every day
             (currentChartPeriod === 'month') || // Every day
@@ -451,20 +447,25 @@ window.renderDashboardChart = () => {
         }
     });
 
+    // --- SCROLLING LOGIC REMOVED in favor of Zoom/Pan ---
+    // The previous scroll container logic is replaced by the chartjs-plugin-zoom
+    const chartBody = document.querySelector('.chart-body');
+    if (chartBody) chartBody.style.width = '100%';
+
     // --- RENDER MAIN CHART (BAR) ---
     if (mainChart) mainChart.destroy();
 
     mainChart = new Chart(ctxMain, {
-        type: 'bar',
+        type: 'bar', // Changed to Bar
         data: {
             labels: chartLabels,
             datasets: [{
                 label: 'Asset Value',
                 data: chartData,
-                backgroundColor: '#6366f1',
+                borderColor: '#4f46e5',
+                backgroundColor: '#4f46e5', // Solid Blue
                 borderRadius: 4,
                 barPercentage: 0.6,
-                categoryPercentage: 0.8
             }]
         },
         options: {
@@ -478,6 +479,21 @@ window.renderDashboardChart = () => {
                     borderColor: 'rgba(255,255,255,0.1)',
                     borderWidth: 1,
                     padding: 10
+                },
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        threshold: 5 // Default threshold
+                    },
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        mode: 'x',
+                    },
+                    limits: {
+                        x: { min: 'original', max: 'original' },
+                    }
                 }
             },
             scales: {
@@ -494,12 +510,13 @@ window.renderDashboardChart = () => {
         }
     });
 
-    // --- PIE CHART (Doughnut) ---
-    const catData = {};
+    // --- PIE CHART (Doughnut) - PRODUCT DISTRIBUTION ---
+    const productData = {};
     products.forEach(p => {
         if (p.stock > 0) {
-            const key = p.category || 'Uncategorized';
-            catData[key] = (catData[key] || 0) + (p.stock * p.buyPrice);
+            // Group by Product Name instead of Category
+            const key = p.name;
+            productData[key] = (productData[key] || 0) + (p.stock * p.buyPrice);
         }
     });
 
@@ -508,10 +525,14 @@ window.renderDashboardChart = () => {
     pieChart = new Chart(ctxPie, {
         type: 'doughnut',
         data: {
-            labels: Object.keys(catData),
+            labels: Object.keys(productData),
             datasets: [{
-                data: Object.values(catData),
-                backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6'],
+                data: Object.values(productData),
+                backgroundColor: [
+                    '#6366f1', '#10b981', '#f59e0b', '#ef4444',
+                    '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
+                    '#f97316', '#06b6d4', '#84cc16', '#a855f7'
+                ],
                 borderWidth: 0,
                 hoverOffset: 4
             }]
@@ -519,11 +540,10 @@ window.renderDashboardChart = () => {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '70%',
+            cutout: '60%',
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: { boxWidth: 8, color: '#94a3b8', font: { size: 10 }, padding: 15 }
+                    display: false // Hide legend to save space
                 }
             }
         }
@@ -699,6 +719,8 @@ window.toggleSidebar = () => document.body.classList.toggle('sidebar-active');
 const init = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const view = urlParams.get('view') || 'dashboard';
+    // Initial load: don't push state, just replace
+    history.replaceState({ view }, document.title, `?view=${view}`);
     switchView(view, null, false);
 };
 
