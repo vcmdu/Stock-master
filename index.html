@@ -20,6 +20,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <!-- Framer Motion (Motion) -->
+    <script src="https://cdn.jsdelivr.net/npm/motion@11.11.17/dist/motion.js"></script>
 </head>
 
 <body>
@@ -55,6 +59,10 @@
                 <li onclick="switchView('reports', this)">
                     <ion-icon name="bar-chart-outline"></ion-icon>
                     <span>Reports</span>
+                </li>
+                <li onclick="switchView('growth', this)">
+                    <ion-icon name="trending-up-outline"></ion-icon>
+                    <span>Growth Trajectory</span>
                 </li>
                 <li onclick="switchView('settings', this)">
                     <ion-icon name="settings-outline"></ion-icon>
@@ -113,59 +121,57 @@
                     </div>
                 </div>
 
-                <!-- Dashboard Charts Check -->
-                <div class="chart-section" style="margin-bottom: 24px;">
-                    <!-- Combined Growth & Category Analytics -->
+                <div class="dashboard-split">
+                    <!-- Out of Stock Detail Section (Replaces Growth Chat) -->
                     <div class="card">
                         <div class="card-header">
-                            <h3>Growth Analytics</h3>
-                            <div class="chart-period-selector">
-                                <button class="period-btn" data-period="week"
-                                    onclick="updateChartPeriod('week')">Week</button>
-                                <button class="period-btn active" data-period="month"
-                                    onclick="updateChartPeriod('month')">Month</button>
-                                <button class="period-btn" data-period="year"
-                                    onclick="updateChartPeriod('year')">Year</button>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div class="stat-icon out" style="width:32px; height:32px; font-size:1.2rem;"><ion-icon
+                                        name="close-circle-outline"></ion-icon></div>
+                                <h3>Out of Stock Details</h3>
                             </div>
                         </div>
-
-                        <div class="chart-split-container">
-                            <!-- Main Bar Chart -->
-                            <div class="line-chart-wrapper">
-                                <div class="chart-scroll-container">
-                                    <div class="chart-body">
-                                        <canvas id="dashboard-line-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Pie Chart -->
-                            <div class="pie-chart-wrapper">
-                                <h4 class="chart-title">Product Dist.</h4>
-                                <div class="pie-container">
-                                    <canvas id="dashboard-pie-chart"></canvas>
-                                </div>
-                            </div>
+                        <div class="table-responsive">
+                            <table class="styled-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboard-out-of-stock-body">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div>
 
-                <div class="dashboard-split">
                     <div class="card">
                         <div class="card-header">
-                            <h3>Low Stock Alerts</h3>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div class="stat-icon warn" style="width:32px; height:32px; font-size:1.2rem;">
+                                    <ion-icon name="alert-circle-outline"></ion-icon>
+                                </div>
+                                <h3>Low Stock Alerts</h3>
+                            </div>
                         </div>
                         <div id="low-stock-list" class="list-container">
                             <!-- Injected JS -->
                         </div>
                     </div>
-                    <div class="card">
-                        <div class="card-header">
+                </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div class="stat-icon" style="width:32px; height:32px; font-size:1.2rem;">
+                                <ion-icon name="time-outline"></ion-icon>
+                            </div>
                             <h3>Recent Activity</h3>
                         </div>
-                        <div id="recent-activity-list" class="list-container">
-                            <!-- Injected JS -->
-                        </div>
+                    </div>
+                    <div id="recent-activity-list" class="list-container">
+                        <!-- Injected JS -->
                     </div>
                 </div>
             </section>
@@ -177,8 +183,8 @@
                         <ion-icon name="search-outline"></ion-icon>
                         <input type="text" id="inv-search" placeholder="Search products..." onkeyup="renderInventory()">
                     </div>
-                    <button class="btn btn-primary" onclick="openProductModal()">
-                        <ion-icon name="add"></ion-icon> New Product
+                    <button class="btn btn-primary" onclick="switchView('buy')">
+                        <ion-icon name="add-circle-outline"></ion-icon> Buy / Add New Item
                     </button>
                 </div>
                 <div class="card table-card">
@@ -230,12 +236,12 @@
 
                             <div class="grid-2-inner">
                                 <div class="form-group">
-                                    <label>Brand</label>
+                                    <label>Brand (Optional)</label>
                                     <input type="text" id="buy-brand" list="buy-brands-list" placeholder="Brand"
-                                        required oninput="handleProductInput('IN')">
+                                        oninput="handleProductInput('IN')">
                                 </div>
                                 <div class="form-group">
-                                    <label>Category</label>
+                                    <label>Category (Optional)</label>
                                     <input type="text" id="buy-category" list="buy-cats-list" placeholder="Category"
                                         oninput="handleProductInput('IN')">
                                 </div>
@@ -254,6 +260,40 @@
                                 </div>
                             </div>
 
+                            <!-- New Product "Smart" Fields (Initially Hidden) -->
+                            <div id="buy-new-product-fields"
+                                style="display:none; background:rgba(16, 185, 129, 0.1); padding:15px; border-radius:8px; border:1px solid rgba(16, 185, 129, 0.3); margin-bottom: 20px;">
+                                <h4
+                                    style="color:var(--success); margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                                    <ion-icon name="sparkles"></ion-icon> New Product Detected
+                                </h4>
+                                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:15px;">
+                                    This looks like a new item! Set its details now to save time.
+                                </p>
+
+                                <div class="form-group">
+                                    <label>Unit Type</label>
+                                    <select id="buy-new-unit" onchange="updateRefinedModalFields('buy')">
+                                        <option value="Piece">Piece / Unit</option>
+                                        <option value="Box">Box / Pack</option>
+                                        <option value="KG">KG (Weight)</option>
+                                        <option value="Meter">Meter (Length)</option>
+                                    </select>
+                                </div>
+
+                                <div class="grid-2-inner">
+                                    <div class="form-group" style="margin-bottom:0">
+                                        <label>Selling Price</label>
+                                        <input type="number" id="buy-new-sell-price" min="0" step="0.01"
+                                            placeholder="0.00">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0">
+                                        <label>Min Stock Alert</label>
+                                        <input type="number" id="buy-new-min-stock" min="0" value="5">
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-group" id="buy-info-group"
                                 style="display:none; background:rgba(255,255,255,0.05); padding:12px; border-radius:8px;">
                                 <div
@@ -267,8 +307,18 @@
 
                             <div class="grid-2-inner">
                                 <div class="form-group">
-                                    <label>Quantity</label>
-                                    <input type="number" id="buy-qty" min="1" required placeholder="0">
+                                    <div
+                                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                        <label>Quantity</label>
+                                        <!-- Unit Toggle (Hidden by default) -->
+                                        <div id="buy-unit-toggle" style="display:none; gap:5px;">
+                                            <button type="button" class="unit-btn active" data-mode="stock"
+                                                onclick="setUnitMode('IN', 'stock')">Base</button>
+                                            <button type="button" class="unit-btn" data-mode="bulk"
+                                                onclick="setUnitMode('IN', 'bulk')">Bulk</button>
+                                        </div>
+                                    </div>
+                                    <input type="number" id="buy-qty" min="0.001" step="0.001" required placeholder="0">
                                 </div>
                                 <div class="form-group">
                                     <label>Unit Price (Buy)</label>
@@ -277,8 +327,8 @@
                             </div>
 
                             <div class="form-group">
-                                <label>Notes (Optional)</label>
-                                <input type="text" id="buy-notes" placeholder="Supplier name...">
+                                <label>Remarks (Optional)</label>
+                                <input type="text" id="buy-notes" placeholder="Supplier name, details...">
                             </div>
 
                             <button type="submit" class="btn btn-primary full-width">Record Purchase</button>
@@ -322,8 +372,8 @@
 
                             <div class="grid-2-inner">
                                 <div class="form-group">
-                                    <label>Brand</label>
-                                    <select id="sell-brand" required onchange="handleProductInput('OUT')">
+                                    <label>Brand (Optional)</label>
+                                    <select id="sell-brand" onchange="handleProductInput('OUT')">
                                         <option value="">Select Brand...</option>
                                     </select>
                                 </div>
@@ -358,13 +408,30 @@
                                         <label style="margin-bottom:4px; font-size:0.75rem;">Available Stock</label>
                                         <div id="sell-stock-display" style="font-weight:700;">-</div>
                                     </div>
+                                    <div style="text-align:right">
+                                        <label style="margin-bottom:4px; font-size:0.75rem;">Unit Cost (Buy)</label>
+                                        <div id="sell-buy-price-display"
+                                            style="font-weight:700; color:var(--text-secondary)">-
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div class="grid-2-inner">
                                 <div class="form-group">
-                                    <label>Quantity</label>
-                                    <input type="number" id="sell-qty" min="1" required placeholder="0">
+                                    <div
+                                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                        <label>Quantity</label>
+                                        <!-- Unit Toggle (Hidden by default) -->
+                                        <div id="sell-unit-toggle" style="display:none; gap:5px;">
+                                            <button type="button" class="unit-btn active" data-mode="stock"
+                                                onclick="setUnitMode('OUT', 'stock')">Base</button>
+                                            <button type="button" class="unit-btn" data-mode="bulk"
+                                                onclick="setUnitMode('OUT', 'bulk')">Bulk</button>
+                                        </div>
+                                    </div>
+                                    <input type="number" id="sell-qty" min="0.001" step="0.001" required
+                                        placeholder="0">
                                 </div>
                                 <div class="form-group">
                                     <label>Unit Price (Sell)</label>
@@ -374,8 +441,8 @@
                             </div>
 
                             <div class="form-group">
-                                <label>Notes (Optional)</label>
-                                <input type="text" id="sell-notes" placeholder="Customer name...">
+                                <label>Remarks (Optional)</label>
+                                <input type="text" id="sell-notes" placeholder="Customer name, details...">
                             </div>
 
                             <button type="submit" class="btn btn-primary full-width"
@@ -415,18 +482,27 @@
                     <div class="grid-2-inner" style="margin-bottom: 24px;">
                         <div class="form-group">
                             <label>From Date</label>
-                            <input type="date" id="report-date-from">
+                            <input type="date" id="report-date-from" onchange="runReports(currentReportFilter)">
                         </div>
                         <div class="form-group">
                             <label>To Date</label>
-                            <input type="date" id="report-date-to">
+                            <input type="date" id="report-date-to" onchange="runReports(currentReportFilter)">
                         </div>
                     </div>
-                    <div class="toolbar" style="margin-bottom: 0;">
-                        <button class="btn btn-primary" onclick="runReports()">
-                            <ion-icon name="filter"></ion-icon> Filter Reports
+                    <div class="toolbar" style="margin-bottom: 0; flex-wrap:wrap; gap:10px;">
+                        <button class="btn btn-primary" onclick="runReports('ALL')">
+                            <ion-icon name="list"></ion-icon> All
                         </button>
-                        <div class="report-btn-group">
+                        <button class="btn btn-primary" onclick="runReports('IN')"
+                            style="background-color: var(--success); border-color: var(--success);">
+                            <ion-icon name="arrow-down"></ion-icon> Purchases
+                        </button>
+                        <button class="btn btn-primary" onclick="runReports('OUT')"
+                            style="background-color: var(--danger); border-color: var(--danger);">
+                            <ion-icon name="arrow-up"></ion-icon> Sales
+                        </button>
+
+                        <div class="report-btn-group" style="margin-left:auto;">
                             <button class="btn btn-primary" onclick="clearReportFilters()">
                                 Clear
                             </button>
@@ -475,13 +551,99 @@
                                 <th>Product</th>
                                 <th>Qty</th>
                                 <th>Total</th>
-                                <th>Notes</th>
+                                <th>Remarks</th>
                             </tr>
                         </thead>
                         <tbody id="report-table-body">
                             <!-- JS -->
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            <!-- VIEW: Growth Trajectory -->
+            <section id="view-growth" class="view">
+                <div class="card" style="margin-bottom: 24px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                        <div>
+                            <h2 style="margin-bottom: 5px;">Inventory Analytics</h2>
+                            <p style="color: var(--text-muted); font-size: 0.9rem;">Real-time stock flow and growth
+                                trajectory</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="view-toggle">
+                                <button class="toggle-btn" onclick="setGrowthPeriod('day')">Day</button>
+                                <button class="toggle-btn" onclick="setGrowthPeriod('week')">Week</button>
+                                <button class="toggle-btn active" onclick="setGrowthPeriod('monthly')">Month</button>
+                                <button class="toggle-btn" onclick="setGrowthPeriod('yearly')">Year</button>
+                            </div>
+                            <div class="view-toggle" style="background: rgba(255,255,255,0.05);">
+                                <button class="toggle-btn active" id="btn-mode-value"
+                                    onclick="setGrowthMode('value')">Value</button>
+                                <button class="toggle-btn" id="btn-mode-qty" onclick="setGrowthMode('qty')">Qty</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card chart-card">
+                    <div class="card-header"
+                        style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 id="chart-main-title">Stock Flow Trajectory</h3>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="growth-percentage-display" style="font-weight: 700; font-size: 0.9rem;"></span>
+                            <div id="chart-trend-badge" class="badge ok" style="display: none;">Stable</div>
+                        </div>
+                    </div>
+                    <div class="chart-container" style="position: relative; height:450px; width:100%">
+                        <canvas id="growthChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="stats-grid" style="margin-top: 24px;">
+                    <div class="card growth-stat-card">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div class="stat-icon up" style="width: 32px; height: 32px; font-size: 1rem;"><ion-icon
+                                    name="arrow-down-circle"></ion-icon></div>
+                            <h4 style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total
+                                Purchased (IN)</h4>
+                        </div>
+                        <h2 id="growth-in-val">0</h2>
+                        <span class="growth-label positive" id="growth-in-pct">+0%</span>
+                    </div>
+                    <div class="card growth-stat-card">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div class="stat-icon out" style="width: 32px; height: 32px; font-size: 1rem;"><ion-icon
+                                    name="arrow-up-circle"></ion-icon></div>
+                            <h4 style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total
+                                Sold (OUT)</h4>
+                        </div>
+                        <h2 id="growth-out-val">0</h2>
+                        <span class="growth-label positive" id="growth-out-pct">+0%</span>
+                    </div>
+                    <div class="card growth-stat-card">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div class="stat-icon"
+                                style="width: 32px; height: 32px; font-size: 1rem; color: var(--brand-primary);">
+                                <ion-icon name="layers"></ion-icon>
+                            </div>
+                            <h4 style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Net
+                                Available Stock</h4>
+                        </div>
+                        <h2 id="growth-net-val">0</h2>
+                        <span class="growth-label positive" id="growth-net-pct">+0%</span>
+                    </div>
+                    <div class="card growth-stat-card">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div class="stat-icon warn" style="width: 32px; height: 32px; font-size: 1rem;"><ion-icon
+                                    name="trending-up"></ion-icon></div>
+                            <h4 style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Growth
+                                Period</h4>
+                        </div>
+                        <h2 id="growth-period-label">-</h2>
+                        <span class="growth-label" id="growth-overall-trend">Stable</span>
+                    </div>
                 </div>
             </section>
 
@@ -542,7 +704,7 @@
     <div id="product-modal" class="modal-overlay">
         <div class="modal">
             <div class="modal-header">
-                <h3 id="product-modal-title">New Product</h3>
+                <h3 id="product-modal-title">Edit Product Details</h3>
                 <button onclick="closeProductModal()" class="icon-btn"><ion-icon name="close"></ion-icon></button>
             </div>
             <form onsubmit="saveProduct(event)">
@@ -552,10 +714,20 @@
                     <input type="text" id="prod-name" required placeholder="e.g. Wireless Mouse">
                 </div>
 
+                <div class="form-group">
+                    <label>Unit Type</label>
+                    <select id="prod-unit" onchange="updateRefinedModalFields()">
+                        <option value="Box">Box / Pack</option>
+                        <option value="Piece">Piece / Unit</option>
+                        <option value="KG">KG (Weight)</option>
+                        <option value="Meter">Meter (Length)</option>
+                    </select>
+                </div>
+
                 <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div class="form-group">
-                        <label>Brand</label>
-                        <input type="text" id="prod-brand" required placeholder="e.g. Tata">
+                        <label>Brand (Optional)</label>
+                        <input type="text" id="prod-brand" placeholder="e.g. Tata">
                     </div>
                     <div class="form-group">
                         <label>Category</label>
@@ -564,12 +736,12 @@
                 </div>
 
                 <div class="grid-2-inner" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div class="form-group">
+                    <div class="form-group" id="prod-size-group">
                         <label>Size</label>
                         <input type="text" id="prod-size" placeholder="e.g. 12 Inch">
                     </div>
-                    <div class="form-group">
-                        <label>KG</label>
+                    <div class="form-group" id="prod-kg-group">
+                        <label>KG / Weight (per unit)</label>
                         <input type="text" id="prod-kg" placeholder="e.g. 2.5">
                     </div>
                 </div>
@@ -590,12 +762,40 @@
                     </div>
                 </div>
 
-                <div id="initial-stock-group" class="form-group"
-                    style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; margin-top:10px;">
-                    <label>Initial Stock Quantity</label>
-                    <input type="number" id="prod-stock" min="0" value="0">
-                    <small style="color:#888;">Adding stock here creates an opening balance entry.</small>
+                <!-- Initial Stock Removed - Handled by Buy Transactions Only -->
+
+                <!-- Advanced Unit Conversion -->
+                <div class="form-group"
+                    style="background:rgba(79, 70, 229, 0.1); padding:12px; border-radius:8px; margin-top:15px; border:1px solid rgba(79, 70, 229, 0.3);">
+                    <label class="checkbox-label"
+                        style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:10px;">
+                        <input type="checkbox" id="prod-has-conversion" onchange="toggleConversionFields()">
+                        <span style="font-weight:600; color:var(--primary)">Enable Unit Conversion?</span>
+                    </label>
+                    <p style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:10px;">
+                        Use this if you Buy in one unit (e.g. Pack/KG) but Sell in another (KG/Meter).
+                    </p>
+
+                    <div id="prod-conversion-fields"
+                        style="display:none; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
+                        <div class="grid-2-inner">
+                            <div class="form-group" style="margin-bottom:0">
+                                <label>Purchase Unit</label>
+                                <input type="text" id="prod-buy-unit" placeholder="e.g. Box, Ton">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0">
+                                <label>Conversion Rate</label>
+                                <input type="number" id="prod-conversion-rate" step="0.001" min="0"
+                                    placeholder="e.g. 50">
+                            </div>
+                        </div>
+                        <div style="font-size:0.8rem; color:#fbbf24; margin-top:8px; font-style:italic;">
+                            Formula: 1 <span id="preview-buy-unit">[Unit]</span> = <span id="preview-rate">X</span>
+                            <span id="preview-stock-unit">[Base]</span>
+                        </div>
+                    </div>
                 </div>
+
                 <button type="submit" class="btn btn-primary full-width">Save Product</button>
             </form>
         </div>
@@ -648,7 +848,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Notes</label>
+                    <label>Remarks</label>
                     <input type="text" id="edit-trans-notes">
                 </div>
 
