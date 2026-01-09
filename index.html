@@ -84,7 +84,17 @@
                     </button>
                     <h2 id="page-title">Dashboard</h2>
                 </div>
-                <div class="user-actions">
+                <div class="user-actions" style="display:flex; gap:15px; align-items:center;">
+                    <!-- Report Search Bar (Moved here) -->
+                    <div id="header-search-container" style="display:none; position:relative;">
+                        <ion-icon name="search-outline"
+                            style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></ion-icon>
+                        <input type="text" id="report-search" placeholder="Search..."
+                            oninput="toggleSearchClear(); runReports(currentReportFilter)"
+                            style="padding: 8px 30px 8px 32px; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; background: rgba(255,255,255,0.05); color: var(--text-main); width: 220px; font-size:0.9rem;">
+                        <ion-icon name="close-circle" id="search-clear-btn" onclick="clearHeaderSearch()"
+                            style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-main); font-size:1.2rem; cursor:pointer; display:none; z-index:10;"></ion-icon>
+                    </div>
                 </div>
             </header>
 
@@ -178,13 +188,24 @@
 
             <!-- VIEW: Inventory -->
             <section id="view-inventory" class="view">
-                <div class="toolbar">
-                    <div class="search-wrap">
-                        <ion-icon name="search-outline"></ion-icon>
-                        <input type="text" id="inv-search" placeholder="Search products..." onkeyup="renderInventory()">
+                <div class="toolbar" style="flex-wrap: wrap; gap: 15px;">
+                    <div style="display:flex; gap:10px; align-items:center; flex:1; min-width: 280px;">
+                        <div class="search-wrap" style="flex:1; position:relative;">
+                            <ion-icon name="search-outline"
+                                style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></ion-icon>
+                            <input type="text" id="inv-search" placeholder="Search products..."
+                                onkeyup="toggleInvSearchClear(); renderInventory()"
+                                style="padding: 8px 30px 8px 32px; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; background: rgba(255,255,255,0.05); color: var(--text-main); width: 100%; font-size:0.9rem;">
+                            <ion-icon name="close-circle" id="inv-search-clear-btn" onclick="clearInvSearch()"
+                                style="position:absolute; right:12px; left:auto; top:50%; transform:translateY(-50%); color:var(--text-main); font-size:1.2rem; cursor:pointer; display:none; pointer-events:auto; z-index:10;"></ion-icon>
+                        </div>
+                        <button class="btn btn-secondary" onclick="downloadInventoryPDF()"
+                            style="display:flex; align-items:center; gap:5px; white-space:nowrap;">
+                            <ion-icon name="download-outline"></ion-icon> PDF
+                        </button>
                     </div>
                     <button class="btn btn-primary" onclick="switchView('buy')">
-                        <ion-icon name="add-circle-outline"></ion-icon> Buy / Add New Item
+                        <ion-icon name="add-circle-outline"></ion-icon> Add New Item
                     </button>
                 </div>
                 <div class="card table-card">
@@ -265,31 +286,58 @@
                                 style="display:none; background:rgba(16, 185, 129, 0.1); padding:15px; border-radius:8px; border:1px solid rgba(16, 185, 129, 0.3); margin-bottom: 20px;">
                                 <h4
                                     style="color:var(--success); margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-                                    <ion-icon name="sparkles"></ion-icon> New Product Detected
+                                    <ion-icon name="sparkles"></ion-icon> New Product Setup
                                 </h4>
                                 <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:15px;">
-                                    This looks like a new item! Set its details now to save time.
+                                    Define how you sell this item.
                                 </p>
 
-                                <div class="form-group">
-                                    <label>Unit Type</label>
-                                    <select id="buy-new-unit" onchange="updateRefinedModalFields('buy')">
-                                        <option value="Piece">Piece / Unit</option>
-                                        <option value="Box">Box / Pack</option>
-                                        <option value="KG">KG (Weight)</option>
-                                        <option value="Meter">Meter (Length)</option>
-                                    </select>
+                                <div class="grid-2-inner">
+                                    <div class="form-group">
+                                        <label>Unit Type (Selling)</label>
+                                        <select id="buy-new-unit" required onchange="updateNewProductFields()">
+                                            <option value="" selected disabled>Select Unit Type...</option>
+                                            <option value="Piece">Piece / Unit (Qty)</option>
+                                            <option value="Pack">Pack (Qty)</option>
+                                            <option value="KG">KG (Weight)</option>
+                                            <option value="Meter">Meter (Length)</option>
+                                            <option value="Box">Box (Direct Sell)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Size (Optional)</label>
+                                        <input type="text" id="buy-new-size" list="buy-sizes-list" placeholder="Size">
+                                    </div>
                                 </div>
 
                                 <div class="grid-2-inner">
-                                    <div class="form-group" style="margin-bottom:0">
-                                        <label>Selling Price</label>
+                                    <div class="form-group">
+                                        <label>Min Stock Alert</label>
+                                        <input type="number" id="buy-new-min-stock" min="0" value="5">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Selling Price (Unit)</label>
                                         <input type="number" id="buy-new-sell-price" min="0" step="0.01"
                                             placeholder="0.00">
                                     </div>
-                                    <div class="form-group" style="margin-bottom:0">
-                                        <label>Min Stock Alert</label>
-                                        <input type="number" id="buy-new-min-stock" min="0" value="5">
+                                </div>
+
+                                <div class="grid-2-inner">
+                                    <!-- Dynamic Conversion Field for 'Box -> Pack' scenario -->
+                                    <div class="form-group" id="buy-new-conversion-group" style="display:none;">
+                                        <label>Buying in Bulk?</label>
+                                        <div style="display:flex; gap:10px;">
+                                            <input type="checkbox" id="buy-new-has-conversion"
+                                                onchange="toggleNewConversion()"
+                                                style="width:20px; height:20px; margin-top:8px;">
+                                            <div style="flex:1">
+                                                <input type="text" id="buy-new-buy-unit"
+                                                    placeholder="Bulk Unit (e.g. Carton)"
+                                                    style="margin-bottom:5px; display:none;">
+                                                <input type="number" id="buy-new-rate" placeholder="Items per Carton"
+                                                    style="display:none;">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -466,7 +514,13 @@
             <datalist id="buy-names-list"></datalist>
             <datalist id="buy-brands-list"></datalist>
             <datalist id="buy-cats-list"></datalist>
-            <datalist id="buy-sizes-list"></datalist>
+            <datalist id="buy-sizes-list">
+                <option value="S">
+                <option value="M">
+                <option value="L">
+                <option value="XL">
+                <option value="XXL">
+            </datalist>
             <datalist id="buy-kgs-list"></datalist>
 
             <!-- Sell Specific Datalists for Cascading -->
@@ -489,26 +543,29 @@
                             <input type="date" id="report-date-to" onchange="runReports(currentReportFilter)">
                         </div>
                     </div>
-                    <div class="toolbar" style="margin-bottom: 0; flex-wrap:wrap; gap:10px;">
-                        <button class="btn btn-primary" onclick="runReports('ALL')">
-                            <ion-icon name="list"></ion-icon> All
-                        </button>
-                        <button class="btn btn-primary" onclick="runReports('IN')"
-                            style="background-color: var(--success); border-color: var(--success);">
-                            <ion-icon name="arrow-down"></ion-icon> Purchases
-                        </button>
-                        <button class="btn btn-primary" onclick="runReports('OUT')"
-                            style="background-color: var(--danger); border-color: var(--danger);">
-                            <ion-icon name="arrow-up"></ion-icon> Sales
-                        </button>
+                    <div class="toolbar" style="margin-bottom: 0; flex-wrap:wrap; gap:10px; align-items:center;">
+                        <!-- Filter Group -->
+                        <div class="btn-group"
+                            style="display:flex; gap:5px; background:rgba(255,255,255,0.05); padding:4px; border-radius:8px;">
+                            <button class="btn btn-sm" onclick="runReports('ALL')" id="rep-btn-all"
+                                style="border:none; padding: 6px 12px; border-radius:6px; background:var(--primary); color:white;">All</button>
+                            <button class="btn btn-sm" onclick="runReports('IN')" id="rep-btn-in"
+                                style="border:none; padding: 6px 12px; border-radius:6px; color:var(--text-secondary);">Purchases</button>
+                            <button class="btn btn-sm" onclick="runReports('OUT')" id="rep-btn-out"
+                                style="border:none; padding: 6px 12px; border-radius:6px; color:var(--text-secondary);">Sales</button>
+                        </div>
 
-                        <div class="report-btn-group" style="margin-left:auto;">
-                            <button class="btn btn-primary" onclick="clearReportFilters()">
-                                Clear
+                        <div style="flex:1"></div> <!-- Spacer -->
+
+                        <div class="report-btn-group" style="display:flex; gap:10px;">
+                            <button class="btn btn-secondary" onclick="clearReportFilters()" title="Clear Filters"
+                                style="display:flex; align-items:center; gap:5px;">
+                                <ion-icon name="refresh-outline"></ion-icon> Clear
                             </button>
-                            <button class="btn btn-primary" style="background:#ef4444; border-color:#ef4444"
+                            <button class="btn btn-primary"
+                                style="background:#ef4444; border-color:#ef4444; display:flex; align-items:center; gap:5px;"
                                 onclick="downloadReportPDF()">
-                                <ion-icon name="document-text-outline"></ion-icon> PDF
+                                <ion-icon name="download-outline"></ion-icon> Export PDF
                             </button>
                         </div>
                     </div>
@@ -549,6 +606,9 @@
                                 <th>Date</th>
                                 <th>Type</th>
                                 <th>Product</th>
+                                <th>Size</th>
+                                <th>Unit Price</th>
+                                <th>Sell Price</th>
                                 <th>Qty</th>
                                 <th>Total</th>
                                 <th>Remarks</th>
@@ -764,34 +824,51 @@
 
                 <!-- Initial Stock Removed - Handled by Buy Transactions Only -->
 
-                <!-- Advanced Unit Conversion -->
+                <!-- Scenario 2: Box to Pack Conversion Logic -->
                 <div class="form-group"
-                    style="background:rgba(79, 70, 229, 0.1); padding:12px; border-radius:8px; margin-top:15px; border:1px solid rgba(79, 70, 229, 0.3);">
-                    <label class="checkbox-label"
-                        style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:10px;">
-                        <input type="checkbox" id="prod-has-conversion" onchange="toggleConversionFields()">
-                        <span style="font-weight:600; color:var(--primary)">Enable Unit Conversion?</span>
-                    </label>
-                    <p style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:10px;">
-                        Use this if you Buy in one unit (e.g. Pack/KG) but Sell in another (KG/Meter).
-                    </p>
+                    style="background:rgba(79, 70, 229, 0.1); padding:15px; border-radius:8px; margin-top:20px; border:1px solid rgba(79, 70, 229, 0.3);">
+                    <div style="display:flex; align-items:flex-start; gap:10px; margin-bottom:10px;">
+                        <div style="font-size:1.2rem; color:var(--primary); margin-top:2px;">
+                            <ion-icon name="git-compare-outline"></ion-icon>
+                        </div>
+                        <div>
+                            <label class="checkbox-label"
+                                style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:2px;">
+                                <input type="checkbox" id="prod-has-conversion" onchange="toggleConversionFields()">
+                                <span style="font-weight:700; color:var(--text-main)">Advanced Buying Unit?</span>
+                            </label>
+                            <p style="font-size:0.8rem; color:var(--text-secondary); line-height:1.3;">
+                                Enable this if you <strong>BUY</strong> in a bulk unit (e.g. Box, Carton) but
+                                <strong>SELL</strong> in loose items (e.g. Pieces, Packs).
+                            </p>
+                        </div>
+                    </div>
 
                     <div id="prod-conversion-fields"
-                        style="display:none; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
+                        style="display:none; padding-top:15px; margin-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
+
                         <div class="grid-2-inner">
                             <div class="form-group" style="margin-bottom:0">
-                                <label>Purchase Unit</label>
-                                <input type="text" id="prod-buy-unit" placeholder="e.g. Box, Ton">
+                                <label style="font-size:0.8rem;">Buying Unit (e.g. Box)</label>
+                                <input type="text" id="prod-buy-unit" placeholder="Box"
+                                    oninput="updateConversionPreview()">
                             </div>
                             <div class="form-group" style="margin-bottom:0">
-                                <label>Conversion Rate</label>
-                                <input type="number" id="prod-conversion-rate" step="0.001" min="0"
-                                    placeholder="e.g. 50">
+                                <label style="font-size:0.8rem;">Items per Unit</label>
+                                <input type="number" id="prod-conversion-rate" step="0.001" min="0" placeholder="10"
+                                    oninput="updateConversionPreview()">
                             </div>
                         </div>
-                        <div style="font-size:0.8rem; color:#fbbf24; margin-top:8px; font-style:italic;">
-                            Formula: 1 <span id="preview-buy-unit">[Unit]</span> = <span id="preview-rate">X</span>
-                            <span id="preview-stock-unit">[Base]</span>
+
+                        <div
+                            style="margin-top:12px; background:rgba(0,0,0,0.2); padding:8px 12px; border-radius:6px; border-left:3px solid #fbbf24;">
+                            <p
+                                style="font-size:0.8rem; color:#e5e7eb; margin:0; display:flex; align-items:center; gap:5px;">
+                                <ion-icon name="information-circle"></ion-icon>
+                                <span>1 <strong id="preview-buy-unit" style="color:#fbbf24">Box</strong> contains
+                                    <strong id="preview-rate" style="color:#fbbf24">...</strong> <span
+                                        id="preview-stock-unit">Pieces</span></span>
+                            </p>
                         </div>
                     </div>
                 </div>

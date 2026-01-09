@@ -178,6 +178,13 @@ body {
     box-shadow: 0 4px 12px var(--brand-glow);
 }
 
+@media (max-width: 768px) {
+    .nav-links li {
+        padding: 10px 14px;
+        gap: 10px;
+    }
+}
+
 /* Main Content Area */
 .main-content {
     flex: 1;
@@ -430,10 +437,11 @@ h2 {
 }
 
 /* --- Dashboard Specifics --- */
+/* --- Dashboard Specifics --- */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
     margin-bottom: 24px;
 }
 
@@ -523,7 +531,7 @@ h2 {
 
 .dashboard-split {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 24px;
 }
 
@@ -555,6 +563,15 @@ td {
     padding: 14px 20px;
     border-bottom: 1px solid var(--glass-border);
     font-size: 0.875rem;
+}
+
+@media (max-width: 600px) {
+
+    th,
+    td {
+        padding: 10px 12px;
+        font-size: 0.75rem;
+    }
 }
 
 tbody tr {
@@ -772,6 +789,18 @@ select:focus {
 
 .full-width {
     width: 100%;
+}
+
+@media (max-width: 600px) {
+    .modal {
+        width: 95%;
+        padding: 20px;
+        margin: 10px;
+    }
+
+    .modal-header h3 {
+        font-size: 1.1rem;
+    }
 }
 
 /* Toast */

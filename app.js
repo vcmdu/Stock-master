@@ -1,4 +1,4 @@
-// Data Models
+﻿// Data Models
 let products = [];
 let transactions = [];
 let currentInvFilter = 'all'; // 'all', 'low', 'out'
@@ -140,6 +140,14 @@ window.switchView = (viewName, element, updateHistory = true) => {
         document.body.classList.remove('sidebar-active');
     }
 
+    // Verify Header Search Visibility
+    const headerSearch = document.getElementById('header-search-container');
+    if (headerSearch) {
+        headerSearch.style.display = (viewName === 'reports') ? 'block' : 'none';
+        // Clear search when leaving reports? Optional.
+        // if (viewName !== 'reports') document.getElementById('report-search').value = '';
+    }
+
     // History API
     if (updateHistory) {
         history.pushState({ view: viewName }, titles[viewName], `?view=${viewName}`);
@@ -172,7 +180,11 @@ const resetForms = (viewName) => {
     }
     // Always hide new product fields on reset
     const newFields = document.getElementById('buy-new-product-fields');
-    if (newFields) newFields.style.display = 'none';
+    if (newFields) {
+        newFields.style.display = 'none';
+        const unitSelect = document.getElementById('buy-new-unit');
+        if (unitSelect) unitSelect.required = false;
+    }
 };
 
 // --- DATA LISTS ---
@@ -261,13 +273,15 @@ window.handleProductInput = (type) => {
         kgInput.style.display = 'none';
 
         // Show based on Unit Type of matched product
+        // Show based on Unit Type of matched product
         if (match.unitType === 'Box') {
             sizeInput.style.display = 'block';
             kgInput.style.display = 'block';
-        } else if (match.unitType === 'Piece' || match.unitType === 'KG') {
-            sizeInput.style.display = 'block';
+        } else if (match.unitType === 'Piece' || match.unitType === 'Pack') {
+            sizeInput.style.display = 'block'; // Show size for packs/pieces
+            // kgInput.style.display = 'block'; // Optional: if you want to show weight for pieces
         }
-        // Meter: Remain Hidden
+        // KG, Meter: Hide both (Quantity handles the amount)
 
         // --- CONVERSION TOGGLE LOGIC ---
         const toggleId = `${prefix}-unit-toggle`;
@@ -277,10 +291,17 @@ window.handleProductInput = (type) => {
             // Update Toggle Labels
             toggleDiv.querySelector('[data-mode="stock"]').textContent = match.unitType || 'Base';
             toggleDiv.querySelector('[data-mode="bulk"]').textContent = match.purchaseUnit;
-            // Reset to stock mode by default
-            window.setUnitMode(type, 'stock');
+
+            // Smart Default: If Buying, prefer Bulk (Box). If Selling, prefer Stock (Piece).
+            if (type === 'IN') {
+                window.setUnitMode(type, 'bulk');
+            } else {
+                window.setUnitMode(type, 'stock');
+            }
         } else {
             toggleDiv.style.display = 'none';
+            // Ensure we reset to stock mode if no conversion
+            window.setUnitMode(type, 'stock');
         }
 
 
@@ -304,12 +325,6 @@ window.handleProductInput = (type) => {
         if (qtyLabel) qtyLabel.textContent = 'Quantity / Weight (Total)';
 
         // Reset Fields to Default (Hidden for Clean UI, user selects Unit Type from Modal if creating new)
-        // Wait, if creating new product via Buy form, we rely on Modal? 
-        // Actually, Buy form has these inputs. 
-        // Let's keep them HIDDEN by default to match "Inventory" logic. 
-        // If user types a new name, they effectively can't set Size/KG here easily unless we auto-show?
-        // But the prompt says "default only show inventory new product".
-        // Let's set them to HIDDEN.
         const sizeInput = document.getElementById(`${prefix}-size`).parentElement;
         const kgInput = document.getElementById(`${prefix}-kg`).parentElement;
         if (sizeInput) sizeInput.style.display = 'none';
@@ -324,9 +339,13 @@ window.handleProductInput = (type) => {
             if (!match && name && name.length > 1) {
                 // No match, but user typed a name -> Likely a new product
                 newFields.style.display = 'block';
+                const unitSelect = document.getElementById('buy-new-unit');
+                if (unitSelect) unitSelect.required = true;
             } else {
                 // Match found OR empty name -> Hide new product fields
                 newFields.style.display = 'none';
+                const unitSelect = document.getElementById('buy-new-unit');
+                if (unitSelect) unitSelect.required = false;
             }
         }
     }
@@ -402,14 +421,32 @@ window.handleTransaction = (e, type) => {
             prodId = existing.id;
         } else {
             // "Simply Buy" - Create new product on the fly during purchase
+            const newUnit = document.getElementById('buy-new-unit') ? document.getElementById('buy-new-unit').value : '';
+            if (!newUnit) {
+                showToast('Please select a Unit Type', 'error');
+                return;
+            }
+            const hasConv = document.getElementById('buy-new-has-conversion') ? document.getElementById('buy-new-has-conversion').checked : false;
+
+            let purchaseUnit = null;
+            let conversionRate = null;
+
+            if (hasConv) {
+                purchaseUnit = document.getElementById('buy-new-buy-unit').value;
+                conversionRate = parseFloat(document.getElementById('buy-new-rate').value);
+            }
+
             product = {
                 id: Date.now(),
-                name, brand, category: cat, size, kg,
+                name, brand, category: cat,
+                size: document.getElementById('buy-new-size') ? document.getElementById('buy-new-size').value.trim() : size,
+                kg,
                 stock: 0,
-                // Read from "Smart" fields in Buy form
-                unitType: document.getElementById('buy-new-unit') ? document.getElementById('buy-new-unit').value : 'Piece',
+                unitType: newUnit,
+                purchaseUnit: purchaseUnit,
+                conversionRate: conversionRate,
                 minStock: document.getElementById('buy-new-min-stock') ? parseInt(document.getElementById('buy-new-min-stock').value) || 5 : 5,
-                buyPrice: price, // Now correctly defined
+                buyPrice: price,
                 sellPrice: document.getElementById('buy-new-sell-price') ? parseFloat(document.getElementById('buy-new-sell-price').value) || 0 : 0
             };
             products.push(product);
@@ -646,12 +683,13 @@ const updateDashboard = () => {
 };
 
 // --- INVENTORY ---
-window.renderInventory = () => {
-    const search = document.getElementById('inv-search').value.toLowerCase();
-    const tbody = document.getElementById('inventory-table-body');
-    tbody.innerHTML = '';
+// --- INVENTORY ---
 
-    // Advanced Filtering
+// --- HELPER FOR SHARED FILTERING ---
+window.getFilteredProducts = () => {
+    const search = document.getElementById('inv-search').value.toLowerCase();
+
+    // Advanced Filtering (Name, Brand, Category)
     let filtered = products.filter(p =>
         p.name.toLowerCase().includes(search) ||
         (p.brand || '').toLowerCase().includes(search) ||
@@ -669,6 +707,16 @@ window.renderInventory = () => {
     }
     // 'all' does no additional filtering
 
+    // Sort: Newest First (by ID descending)
+    return filtered.sort((a, b) => b.id - a.id);
+};
+
+window.renderInventory = () => {
+    const tbody = document.getElementById('inventory-table-body');
+    tbody.innerHTML = '';
+
+    const filtered = getFilteredProducts();
+
     if (!filtered.length) {
         tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px; color:var(--text-muted)">
                 No products found ${currentInvFilter !== 'all' ? `(${currentInvFilter} stock)` : ''}
@@ -676,9 +724,7 @@ window.renderInventory = () => {
         return;
     }
 
-    // Sort: Newest First (reverse index order basically, but safer to sort by ID if IDs are timestamps)
-    // Actually IDs are timestamps, so sorting by ID desc is Newest First
-    filtered.sort((a, b) => b.id - a.id).forEach((p, i) => {
+    filtered.forEach((p, i) => {
         const stockNum = Number(p.stock) || 0;
         const minNum = Number(p.minStock) || 0;
         const status = stockNum <= 0 ? '<span class="badge out">Out</span>' :
@@ -745,7 +791,7 @@ window.saveProduct = (e) => {
             });
         }
     } else {
-        // Fallback for direct creation if still used, though 'Buy' is preferred
+        // Fallback for direct creation if still used
         const newP = {
             id: Date.now(),
             name, unitType: unit, brand, category: cat, size, kg, minStock: min, buyPrice: buy, sellPrice: sell,
@@ -769,10 +815,10 @@ window.toggleConversionFields = () => {
 
 window.setUnitMode = (type, mode) => {
     const prefix = type === 'IN' ? 'buy' : 'sell';
-    const form = document.getElementById(`${prefix} -form`);
+    const form = document.getElementById(`${prefix}-form`);
 
     // Update active state of buttons
-    const btns = document.querySelectorAll(`#${prefix} -unit - toggle.unit - btn`);
+    const btns = document.querySelectorAll(`#${prefix}-unit-toggle .unit-btn`);
     btns.forEach(b => {
         if (b.dataset.mode === mode) b.classList.add('active');
         else b.classList.remove('active');
@@ -785,11 +831,11 @@ window.setUnitMode = (type, mode) => {
     const product = products.find(p => p.id == form.dataset.matchedId);
     if (!product) return;
 
-    const qtyInput = document.getElementById(`${prefix} -qty`);
+    const qtyInput = document.getElementById(`${prefix}-qty`);
     if (mode === 'bulk') {
-        qtyInput.placeholder = `Qty in ${product.purchaseUnit || 'Units'} `;
+        qtyInput.placeholder = `Qty in ${product.purchaseUnit || 'Units'}`;
     } else {
-        qtyInput.placeholder = `Qty in ${product.unitType || 'Units'} `;
+        qtyInput.placeholder = `Qty in ${product.unitType || 'Units'}`;
     }
 };
 
@@ -804,8 +850,6 @@ window.editProduct = (id) => {
     document.getElementById('prod-size').value = p.size || '';
     document.getElementById('prod-kg').value = p.kg || '';
     document.getElementById('prod-min').value = p.minStock;
-    document.getElementById('prod-buy').value = p.buyPrice;
-    document.getElementById('prod-sell').value = p.sellPrice;
     document.getElementById('prod-buy').value = p.buyPrice;
     document.getElementById('prod-sell').value = p.sellPrice;
 
@@ -865,11 +909,46 @@ window.openProductModal = (id = '') => {
 window.closeProductModal = () => document.getElementById('product-modal').classList.remove('active');
 window.toggleSidebar = () => document.body.classList.toggle('sidebar-active');
 
+window.toggleSearchClear = () => {
+    const input = document.getElementById('report-search');
+    const btn = document.getElementById('search-clear-btn');
+    if (input && btn) {
+        btn.style.display = input.value.length > 0 ? 'block' : 'none';
+    }
+};
+
+window.clearHeaderSearch = () => {
+    const input = document.getElementById('report-search');
+    if (input) {
+        input.value = '';
+        toggleSearchClear();
+        runReports(currentReportFilter);
+    }
+};
+
+// --- INVENTORY SEARCH CLEAR ---
+window.toggleInvSearchClear = () => {
+    const input = document.getElementById('inv-search');
+    const btn = document.getElementById('inv-search-clear-btn');
+    if (input && btn) {
+        btn.style.display = input.value.length > 0 ? 'block' : 'none';
+    }
+};
+
+window.clearInvSearch = () => {
+    const input = document.getElementById('inv-search');
+    if (input) {
+        input.value = '';
+        toggleInvSearchClear();
+        renderInventory();
+    }
+};
+
 const init = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const view = urlParams.get('view') || 'dashboard';
     // Initial load: don't push state, just replace
-    history.replaceState({ view }, document.title, `? view = ${view} `);
+    history.replaceState({ view }, document.title, `?view=${view}`);
     switchView(view, null, false);
 };
 
@@ -880,25 +959,31 @@ window.runReports = (type = 'ALL', silent = false) => {
     currentReportFilter = type; // Store for PDF
     const fromDateStr = document.getElementById('report-date-from').value;
     const toDateStr = document.getElementById('report-date-to').value;
+    const searchQuery = document.getElementById('report-search').value.toLowerCase();
 
-    // 1. Filter for Stats (Always ALL types within date range)
-    let statsFiltered = transactions;
-    if (fromDateStr) statsFiltered = statsFiltered.filter(t => t.date >= fromDateStr);
-    if (toDateStr) statsFiltered = statsFiltered.filter(t => t.date <= toDateStr);
-    updateReportStats(statsFiltered);
+    // 1. Filter for Stats (Always ALL types within date range - Search applies to stats?)
+    // Usually Stats reflect the TABLE. So lets apply filters to stats too.
+    let filtered = transactions;
+    if (fromDateStr) filtered = filtered.filter(t => t.date >= fromDateStr);
+    if (toDateStr) filtered = filtered.filter(t => t.date <= toDateStr);
 
-    // 2. Filter for Table Display (Date + Type)
-    let displayFiltered = statsFiltered;
+    // Apply Type Filter
     if (type !== 'ALL') {
-        displayFiltered = displayFiltered.filter(t => t.type === type);
+        filtered = filtered.filter(t => t.type === type);
     }
 
-    renderReportTable(displayFiltered);
-
-    if (!silent) {
-        const typeLabel = type === 'ALL' ? 'All' : (type === 'IN' ? 'Purchase' : 'Sales');
-        showToast(`${typeLabel} Report Generated`);
+    // Apply Search Filter
+    if (searchQuery) {
+        filtered = filtered.filter(t =>
+            t.productName.toLowerCase().includes(searchQuery) ||
+            (t.notes && t.notes.toLowerCase().includes(searchQuery))
+        );
     }
+
+    updateReportStats(filtered);
+    renderReportTable(filtered);
+
+    // Toast removed as per user request
 };
 
 window.clearReportFilters = () => {
@@ -972,9 +1057,10 @@ window.updateRefinedModalFields = () => {
         sizeGroup.style.display = 'block';
         kgGroup.style.display = 'block';
     }
-    else if (unit === 'Piece') {
-        // Piece: Show Size (optional). Hide Weight (usually)
+    else if (['Piece', 'Pack'].includes(unit)) {
+        // Piece/Pack: Show Size (optional). Show Weight (optional)
         sizeGroup.style.display = 'block';
+        kgGroup.style.display = 'block';
     }
     // KG, Meter, Liter: Hide both (Quantity handles the amount)
 };
@@ -992,12 +1078,51 @@ const renderReportTable = (txList) => {
     const sorted = [...txList].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     tbody.innerHTML = sorted.map((t, i) => {
-        // Fallback for old data
-        let unit = t.unitType;
-        if (!unit) {
-            const p = products.find(prod => prod.id === t.productId);
-            unit = p ? p.unitType : 'Units';
-        }
+        // Find product for extra details (Use loose equality for ID match safety)
+        const p = products.find(prod => prod.id == t.productId);
+        let unit = t.unitType || (p ? p.unitType : 'Units');
+        let size = t.productSize || (p ? p.size : '-');
+
+        // Prices
+        // Unit Price (At transaction time) -> t.price
+        // Sales Price -> t.total (Total Sales Price) OR current Sell Price?
+        // User asked for "Unit Prize, Sales Prize".
+        // Interpretation: Unit Price = Rate per Item. Sales Price = Total Amount.
+        // OR: Unit Cost vs Unit Sell Price? 
+        // Let's show: Unit Rate (t.price) and Total Amount (t.total).
+
+        // Wait, user said "unit prize,sales prize". 
+        // Maybe they want to see the Margin? 
+        // "unit prize" usually means Unit Price. "Sales prize" might mean Selling Price of the item.
+        // If it's a SALE: t.price IS the selling price.
+        // If it's a BUY: t.price IS the buying price.
+
+        // Let's show specific columns:
+        // Size | Unit Price (Rate) | Sell Price (Total Amount?) -> No "Sales Prize" sounds like Total.
+        // Actually, let's just assume "Sales Price" = "Total Amount" column which we already have?
+        // OR maybe "Unit Price" = Buy Price, "Sales Price" = Sell Price?
+        // Let's stick to Transaction Data:
+        // Size: p.size
+        // Unit Price: t.price
+        // Sell Price : (If Sell) t.total? Or the Product's current Sell Price?
+        // Let's show: Size, Unit Rate (t.price), Total (t.total). 
+        // But headers are: Size, Unit Price, Sell Price, Qty, Total.
+        // So they want 5 data columns + Product name.
+
+        // Let's display:
+        // Unit Price = t.price
+        // Sell Price = If IN transaction: -, If OUT: t.total? 
+        // Actually, maybe "Sell Price" means "Standard Selling Price" of that product?
+        // Let's display p.sellPrice for reference?
+
+        const currentSellPrice = p ? p.sellPrice : 0;
+
+        // Logic for "Sell Price" column display:
+        // Always show the current list price formatted, even if 0.
+        const displayListPrice = formatCurrency(Number(currentSellPrice) || 0);
+
+        // Logic for "Unit Price" column (The transaction price):
+        const displayTxPrice = formatCurrency(Number(t.price) || 0);
 
         return `
             <tr>
@@ -1005,14 +1130,15 @@ const renderReportTable = (txList) => {
             <td>${t.date}</td>
             <td><span class="badge ${t.type === 'IN' ? 'in' : 'out'}">${t.type}</span></td>
             <td>${t.productName}</td>
+            <td>${size || '-'}</td>
+            <td>${displayTxPrice}</td>
+            <td>${displayListPrice}</td> 
             <td>${t.quantity} ${unit || 'Units'}</td>
             <td>${formatCurrency(t.total)}</td>
             <td>${t.notes || '-'}</td>
         </tr>
             `}).join('');
 };
-
-// Removed Duplicate Function
 
 
 window.downloadBackupJSON = () => {
@@ -1026,6 +1152,158 @@ window.downloadBackupJSON = () => {
     dlAnchorElem.setAttribute("href", dataStr);
     dlAnchorElem.setAttribute("download", "stock_backup.json");
     dlAnchorElem.click();
+};
+
+window.downloadBackupPDF = () => {
+    if (typeof jspdf === 'undefined') {
+        showToast('PDF library not loaded', 'error');
+        return;
+    }
+
+    // PDF specific currency helper
+    const pdfFormat = (val) => `RS ${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    let allFiltered = [...transactions];
+    // Sort
+    allFiltered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Stats
+    const totalIn = allFiltered.filter(t => t.type === 'IN').reduce((sum, t) => sum + t.total, 0);
+    const totalOut = allFiltered.filter(t => t.type === 'OUT').reduce((sum, t) => sum + t.total, 0);
+    const netProfit = totalOut - totalIn;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(18);
+    doc.setTextColor(79, 70, 229); // Primary Color
+    doc.text("StockMaster Full Backup Report", 14, 22);
+
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 14, 30);
+
+    const summaryY = 45;
+    doc.setFillColor(245, 247, 250);
+    doc.rect(14, summaryY - 5, 182, 20, 'F');
+    doc.setFontSize(9);
+    doc.setTextColor(0);
+
+    doc.text(`Total Purchases: ${pdfFormat(totalIn)}`, 20, summaryY + 3);
+    doc.text(`Total Sales: ${pdfFormat(totalOut)}`, 80, summaryY + 3);
+    doc.setTextColor(netProfit >= 0 ? 16 : 220, netProfit >= 0 ? 185 : 38, netProfit >= 0 ? 129 : 38);
+    doc.text(`Net Profit: ${pdfFormat(netProfit)}`, 140, summaryY + 3);
+
+    doc.setTextColor(100);
+    doc.setFontSize(8);
+    doc.text(`Period: All Time`, 20, summaryY + 10);
+
+    // Table
+    const tableColumn = ["Date", "Type", "Product", "Size", "Unit Price", "Sell Price", "Qty", "Total", "Rmks"];
+    const tableRows = [];
+
+    allFiltered.forEach(t => {
+        // Find product (loose equality)
+        const p = products.find(prod => prod.id == t.productId);
+        let unit = t.unitType || (p ? p.unitType : 'Units');
+        let size = t.productSize || (p ? p.size : '-');
+        let currentSellPrice = p ? p.sellPrice : 0;
+
+        const rowData = [
+            t.date,
+            t.type,
+            t.productName,
+            size,
+            pdfFormat(Number(t.price) || 0),
+            pdfFormat(Number(currentSellPrice) || 0),
+            `${t.quantity} ${unit}`,
+            pdfFormat(t.total),
+            t.notes || '-'
+        ];
+        tableRows.push(rowData);
+    });
+
+    doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 70,
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229] },
+        styles: { fontSize: 7, cellPadding: 1 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        columnStyles: {
+            0: { cellWidth: 18 }, // Date
+            1: { cellWidth: 10 }, // Type
+            2: { cellWidth: 25 }, // Product
+            3: { cellWidth: 12 }, // Size
+            4: { cellWidth: 20 }, // Unit Price
+            5: { cellWidth: 20 }, // Sell Price
+            6: { cellWidth: 20 }, // Qty
+            7: { cellWidth: 25 }, // Total
+            8: { cellWidth: 'auto' } // Remarks
+        }
+    });
+
+    doc.save(`backup_report_${Date.now()}.pdf`);
+};
+
+window.downloadInventoryPDF = () => {
+    if (typeof jspdf === 'undefined') {
+        showToast('PDF library not loaded', 'error');
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l'); // Landscape for more columns
+
+    // Title
+    doc.setFontSize(18);
+    doc.setTextColor(79, 70, 229);
+    doc.text("StockMaster Inventory Report", 14, 22);
+
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 14, 30);
+
+    // PDF specific currency helper (Using 'Rs.' as standard font doesn't support ₹ symbol)
+    const pdfFormat = (val) => `Rs. ${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const tableColumn = ["S.No", "Product", "Brand", "Category", "Size", "KG", "Stock", "Unit", "Buy Price", "Sell Price", "Value"];
+    const tableRows = [];
+
+    // Use the shared filter function to get EXACTLY what is on screen
+    const sorted = getFilteredProducts();
+
+    sorted.forEach((p, i) => {
+        const stockVal = (Number(p.stock) || 0) * (Number(p.buyPrice) || 0);
+        const rowData = [
+            i + 1,
+            p.name,
+            p.brand || '-',
+            p.category || '-',
+            p.size || '-',
+            p.kg || '-',
+            p.stock,
+            p.unitType || 'Piece',
+            pdfFormat(Number(p.buyPrice) || 0),
+            pdfFormat(Number(p.sellPrice) || 0),
+            pdfFormat(stockVal)
+        ];
+        tableRows.push(rowData);
+    });
+
+    doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229] },
+        styles: { fontSize: 8, cellPadding: 1 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+    });
+
+    doc.save(`inventory_export_${Date.now()}.pdf`);
 };
 
 window.restoreData = (input) => {
@@ -1068,22 +1346,33 @@ window.downloadReportPDF = () => {
     }
 
     // PDF specific currency helper
-    const pdfFormat = (val) => `RS ${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const pdfFormat = (val) => `Rs. ${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     // Filter transactions based on current report view
     const fromDate = document.getElementById('report-date-from').value;
     const toDate = document.getElementById('report-date-to').value;
+    const searchQuery = document.getElementById('report-search').value.toLowerCase();
 
     let allFiltered = transactions;
     if (fromDate) allFiltered = allFiltered.filter(t => t.date >= fromDate);
     if (toDate) allFiltered = allFiltered.filter(t => t.date <= toDate);
-
-    // Filter for table
-    let tableData = allFiltered;
-    if (currentReportFilter && currentReportFilter !== 'ALL') {
-        tableData = tableData.filter(t => t.type === currentReportFilter);
+    if (currentReportFilter !== 'ALL') {
+        allFiltered = allFiltered.filter(t => t.type === currentReportFilter);
     }
-    tableData.sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (searchQuery) {
+        allFiltered = allFiltered.filter(t =>
+            t.productName.toLowerCase().includes(searchQuery) ||
+            (t.notes && t.notes.toLowerCase().includes(searchQuery))
+        );
+    }
+
+    // Sort
+    allFiltered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Stats
+    const totalIn = allFiltered.filter(t => t.type === 'IN').reduce((sum, t) => sum + t.total, 0);
+    const totalOut = allFiltered.filter(t => t.type === 'OUT').reduce((sum, t) => sum + t.total, 0);
+    const netProfit = totalOut - totalIn;
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -1094,16 +1383,15 @@ window.downloadReportPDF = () => {
     doc.text("StockMaster Report", 14, 22);
 
     doc.setFontSize(11);
-    doc.setTextColor(100);
     const typeLabel = currentReportFilter === 'ALL' ? 'All Transactions' : (currentReportFilter === 'IN' ? 'Purchase Report' : 'Sales Report');
+    doc.setTextColor(100);
     doc.text(`${typeLabel} | ${new Date().toLocaleDateString()} `, 14, 30);
+    if (searchQuery) {
+        doc.setFontSize(9);
+        doc.text(`Search: "${searchQuery}"`, 14, 35);
+    }
 
-    // Summary Stats (Always show all 3 for context in PDF)
-    const totalIn = allFiltered.filter(t => t.type === 'IN').reduce((sum, t) => sum + t.total, 0);
-    const totalOut = allFiltered.filter(t => t.type === 'OUT').reduce((sum, t) => sum + t.total, 0);
-    const netProfit = totalOut - totalIn;
-
-    const summaryY = 40;
+    const summaryY = 45;
     doc.setFillColor(245, 247, 250);
     doc.rect(14, summaryY - 5, 182, 20, 'F');
     doc.setFontSize(9);
@@ -1119,21 +1407,24 @@ window.downloadReportPDF = () => {
     doc.text(`Period: ${fromDate || 'Start'} to ${toDate || 'End'}`, 20, summaryY + 10);
 
     // Table
-    const tableColumn = ["Date", "Type", "Product", "Quantity", "Total", "Remarks"];
+    const tableColumn = ["Date", "Type", "Product", "Size", "Unit Price", "Sell Price", "Qty", "Total", "Rmks"];
     const tableRows = [];
 
-    tableData.forEach(t => {
-        let unit = t.unitType;
-        if (!unit) {
-            const p = products.find(prod => prod.id === t.productId);
-            unit = p ? p.unitType : 'Units';
-        }
+    allFiltered.forEach(t => {
+        // Find product (loose equality)
+        const p = products.find(prod => prod.id == t.productId);
+        let unit = t.unitType || (p ? p.unitType : 'Units');
+        let size = t.productSize || (p ? p.size : '-');
+        let currentSellPrice = p ? p.sellPrice : 0;
 
         const rowData = [
             t.date,
             t.type,
             t.productName,
-            `${t.quantity} ${unit || 'Units'} `,
+            size,
+            pdfFormat(Number(t.price) || 0),
+            pdfFormat(Number(currentSellPrice) || 0),
+            `${t.quantity} ${unit}`,
             pdfFormat(t.total),
             t.notes || '-'
         ];
@@ -1143,11 +1434,22 @@ window.downloadReportPDF = () => {
     doc.autoTable({
         head: [tableColumn],
         body: tableRows,
-        startY: 65,
+        startY: 70,
         theme: 'grid',
         headStyles: { fillColor: [79, 70, 229] },
-        styles: { fontSize: 8 },
-        alternateRowStyles: { fillColor: [249, 250, 251] }
+        styles: { fontSize: 7, cellPadding: 1 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        columnStyles: {
+            0: { cellWidth: 18 }, // Date
+            1: { cellWidth: 10 }, // Type
+            2: { cellWidth: 25 }, // Product
+            3: { cellWidth: 12 }, // Size
+            4: { cellWidth: 20 }, // Unit Price
+            5: { cellWidth: 20 }, // Sell Price
+            6: { cellWidth: 20 }, // Qty
+            7: { cellWidth: 25 }, // Total
+            8: { cellWidth: 'auto' } // Remarks
+        }
     });
 
     doc.save(`report_${currentReportFilter.toLowerCase()}_${Date.now()}.pdf`);
@@ -1522,3 +1824,93 @@ window.initGrowthChart = () => {
 };
 
 
+
+// --- PRODUCT MODAL HELPERS ---
+window.updateConversionPreview = () => {
+    const unit = document.getElementById('prod-buy-unit').value || '[Unit]';
+    const rate = document.getElementById('prod-conversion-rate').value || 'X';
+    const base = document.getElementById('prod-unit').value || 'Piece';
+
+    document.getElementById('preview-buy-unit').textContent = unit;
+    document.getElementById('preview-rate').textContent = rate;
+    document.getElementById('preview-stock-unit').textContent = base + 's';
+};
+
+window.updateRefinedModalFields = () => {
+    updateConversionPreview();
+};
+
+// --- BUY FORM NEW PRODUCT HELPERS ---
+// --- BUY FORM NEW PRODUCT HELPERS ---
+window.updateNewProductFields = () => {
+    const unit = document.getElementById('buy-new-unit').value;
+
+    // 1. Dynamic Quantity Placeholder & Label
+    const qtyInput = document.getElementById('buy-qty');
+    const qtyLabel = document.querySelector('label[for="buy-qty"]');
+
+    if (qtyInput) qtyInput.placeholder = unit ? `Qty (${unit})` : 'Quantity';
+    if (qtyLabel) {
+        if (!unit) qtyLabel.textContent = 'Quantity';
+        else if (unit === 'KG') qtyLabel.textContent = 'Weight (KG)';
+        else if (unit === 'Meter') qtyLabel.textContent = 'Length (Meters)';
+        else qtyLabel.textContent = `Quantity (${unit})`;
+    }
+
+    // 2. Dynamic Field Visibility (Size / KG)
+    // Note: These inputs are in the MAIN form, not the new product section, but we want to show/hide them based on the new type being created.
+    const sizeInput = document.getElementById('buy-size');
+    const kgInput = document.getElementById('buy-kg');
+
+    // Check if elements exist before accessing parent
+    if (sizeInput && kgInput) {
+        const sizeGroup = sizeInput.parentElement;
+        const kgGroup = kgInput.parentElement;
+
+        // Default: Hide
+        sizeGroup.style.display = 'none';
+        kgGroup.style.display = 'none';
+
+        if (unit === 'Box') {
+            sizeGroup.style.display = 'block';
+            kgGroup.style.display = 'block';
+        } else if (unit === 'KG') {
+            kgGroup.style.display = 'block';
+        } else if (['Piece', 'Pack'].includes(unit)) {
+            sizeGroup.style.display = 'block'; // Optional: allow size for packs?
+        }
+    }
+
+    // 3. Conversion Logic
+    const convGroup = document.getElementById('buy-new-conversion-group');
+    if (convGroup) {
+        // Show conversion option for all types as requested (Bulk buying possible for KG/Meter too)
+        if (['Piece', 'Pack', 'KG', 'Meter'].includes(unit)) {
+            convGroup.style.display = 'block';
+        } else {
+            convGroup.style.display = 'none';
+            document.getElementById('buy-new-has-conversion').checked = false;
+            toggleNewConversion();
+        }
+    }
+};
+
+window.toggleNewConversion = () => {
+    const isChecked = document.getElementById('buy-new-has-conversion').checked;
+    const buyUnitInput = document.getElementById('buy-new-buy-unit');
+    const rateInput = document.getElementById('buy-new-rate');
+
+    if (isChecked) {
+        buyUnitInput.style.display = 'block';
+        rateInput.style.display = 'block';
+        buyUnitInput.required = true;
+        rateInput.required = true;
+    } else {
+        buyUnitInput.style.display = 'none';
+        rateInput.style.display = 'none';
+        buyUnitInput.required = false;
+        rateInput.required = false;
+        buyUnitInput.value = '';
+        rateInput.value = '';
+    }
+};
